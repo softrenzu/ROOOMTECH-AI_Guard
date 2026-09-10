@@ -3,7 +3,7 @@ name: windows-package
 on:
   workflow_dispatch:
   push:
-    branches: [ main, feature/mvp-foundation, feature/driver-ci ]
+    branches: [ main, feature/mvp-foundation, feature/driver-ci, feature/windows-service ]
     tags:
       - "v*"
 
@@ -79,6 +79,7 @@ jobs:
           Commit: $env:GITHUB_SHA
           Ref: $env:GITHUB_REF
           KernelDriverIncluded: $driverReady
+          AgentStartup: WindowsService
           "@ | Set-Content -Path package/BUILD_INFO.txt -Encoding UTF8
 
           Compress-Archive -Path package/* -DestinationPath ROOOMTECH-AI-Guard-Windows-x64.zip -Force
