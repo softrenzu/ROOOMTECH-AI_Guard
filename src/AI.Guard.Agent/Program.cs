@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Security.Cryptography;
+using System.ServiceProcess;
 using System.Text;
 using System.Text.Json;
 using Rooomtech.AIGuard.Agent;
@@ -48,6 +49,19 @@ switch (args[0].ToLowerInvariant())
         var ok = DriverPolicyBridge.TryPushPolicy(policy, out var message);
         Console.WriteLine(message);
         Environment.ExitCode = ok ? 0 : 20;
+        return;
+    }
+
+    case "service":
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Console.Error.WriteLine("Windows Service mode is only supported on Windows.");
+            Environment.ExitCode = 2;
+            return;
+        }
+
+        ServiceBase.Run(new AiGuardWindowsService());
         return;
     }
 
@@ -213,10 +227,13 @@ Commands:
       Evaluate one access request and write an audit record.
 
   AIGuard sync-driver
-      Push the current policy to the installed minifilter driver.
+      Load the installed minifilter if needed and push the current policy.
 
   AIGuard serve
       Start the local named-pipe policy agent and synchronize the driver.
+
+  AIGuard service
+      Run under the Windows Service Control Manager.
 
 Environment:
   AIGUARD_POLICY
