@@ -43,6 +43,30 @@ switch (args[0].ToLowerInvariant())
         return;
     }
 
+    case "license-check":
+    {
+        if (args.Length < 2)
+        {
+            Console.Error.WriteLine("Usage: AIGuard license-check <license-file>");
+            Environment.ExitCode = 2;
+            return;
+        }
+
+        try
+        {
+            var license = ProductLicensing.LoadLicense(args[1]);
+            var validation = ProductLicensing.ValidateBusinessLicense(license);
+            Console.WriteLine(JsonSerializer.Serialize(validation, jsonOptions));
+            Environment.ExitCode = validation.IsValid && validation.CommercialUseAllowed ? 0 : 30;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            Environment.ExitCode = 30;
+        }
+        return;
+    }
+
     case "sync-driver":
     {
         var policy = JsonPolicyStore.Load(policyPath);
@@ -245,6 +269,9 @@ Commands:
   AIGuard check <file-path> <process-path> [operation]
       Evaluate one access request and write an audit record.
 
+  AIGuard license-check <license-file>
+      Validate a ROOOMTECH-signed Business license. Exit 30 if invalid.
+
   AIGuard sync-driver
       Load the installed minifilter if needed and push the current policy.
 
@@ -262,6 +289,7 @@ Exit codes:
   0   Allowed / success
   10  Denied
   20  Driver synchronization failed
+  30  Invalid business license
   2   Invalid command
 """);
 }

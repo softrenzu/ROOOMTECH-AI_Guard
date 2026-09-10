@@ -16,6 +16,7 @@ public partial class MainWindow : Window
     private readonly string _baseDirectory;
     private readonly string _policyPath;
     private readonly string _auditPath;
+    private readonly string _licensePath;
     private GuardPolicy _policy = new();
 
     public MainWindow()
@@ -28,11 +29,13 @@ public partial class MainWindow : Window
             "AIGuard");
         _policyPath = Path.Combine(_baseDirectory, "policy.json");
         _auditPath = Path.Combine(_baseDirectory, "audit.jsonl");
+        _licensePath = Path.Combine(_baseDirectory, "license.json");
 
         Loaded += async (_, _) =>
         {
             LoadPolicy();
             LoadAudit();
+            RefreshLicenseStatus();
             await RefreshStatusAsync();
         };
     }
@@ -281,12 +284,91 @@ public partial class MainWindow : Window
         Process.Start(new ProcessStartInfo("explorer.exe", _baseDirectory) { UseShellExecute = true });
     }
 
+    private void ImportBusinessLicense_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Title = "ROOOMTECH AI Guard 法人ライセンスを選択",
+            Filter = "AI Guard license (*.json)|*.json|すべてのファイル (*.*)|*.*",
+            CheckFileExists = true,
+            Multiselect = false
+        };
+
+        if (dialog.ShowDialog() != true)
+            return;
+
+        try
+        {
+            var license = ProductLicensing.LoadLicense(dialog.FileName);
+            var validation = ProductLicensing.ValidateBusinessLicense(license);
+            if (!validation.IsValid || !validation.CommercialUseAllowed)
+            {
+                MessageBox.Show(
+                    $"この法人ライセンスは利用できません。\n{validation.Status}",
+                    "AI Guard",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+                return;
+            }
+
+            Directory.CreateDirectory(_baseDirectory);
+            ProductLicensing.SaveLicense(_licensePath, license!);
+            RefreshLicenseStatus();
+            MessageBox.Show("法人ライセンスを登録しました。", "AI Guard", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"ライセンスを読み込めませんでした。\n{ex.Message}", "AI Guard", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private void RefreshLicense_Click(object sender, RoutedEventArgs e) => RefreshLicenseStatus();
+
+    private void OpenLicenseFolder_Click(object sender, RoutedEventArgs e)
+    {
+        Directory.CreateDirectory(_baseDirectory);
+        Process.Start(new ProcessStartInfo("explorer.exe", _baseDirectory) { UseShellExecute = true });
+    }
+
+    private LicenseValidationResult RefreshLicenseStatus()
+    {
+        try
+        {
+            if (!File.Exists(_licensePath))
+            {
+                var personal = ProductLicensing.ValidatePersonalUse();
+                LicenseHeaderStatusText.Text = "個人利用：無償";
+                LicenseStatusText.Text = personal.Status;
+                LicenseDetailText.Text = "法人・団体・業務目的で利用する場合は、有償のBusinessライセンスを登録してください。";
+                return personal;
+            }
+
+            var license = ProductLicensing.LoadLicense(_licensePath);
+            var validation = ProductLicensing.ValidateBusinessLicense(license);
+            LicenseHeaderStatusText.Text = validation.IsValid ? "法人ライセンス：有効" : "法人ライセンス：無効";
+            LicenseStatusText.Text = validation.Status;
+            LicenseDetailText.Text = license is null
+                ? "ライセンス情報を読み込めません。"
+                : $"ライセンスID: {license.LicenseId}\n契約先: {license.LicenseeName}\n組織: {license.Organization}\n端末数: {license.Seats}";
+            return validation;
+        }
+        catch (Exception ex)
+        {
+            var result = new LicenseValidationResult(false, false, "ライセンス確認エラー: " + ex.Message);
+            LicenseHeaderStatusText.Text = "ライセンス：確認失敗";
+            LicenseStatusText.Text = result.Status;
+            LicenseDetailText.Text = _licensePath;
+            return result;
+        }
+    }
+
     private async void RefreshStatus_Click(object sender, RoutedEventArgs e) => await RefreshStatusAsync();
 
     private async Task RefreshStatusAsync()
     {
         DriverStatusText.Text = await Task.Run(GetDriverStatus);
         AgentStatusText.Text = await Task.Run(GetAgentStatus);
+        RefreshLicenseStatus();
     }
 
     private static string GetDriverStatus()

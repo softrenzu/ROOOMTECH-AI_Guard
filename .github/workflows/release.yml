@@ -3,7 +3,7 @@ name: windows-package
 on:
   workflow_dispatch:
   push:
-    branches: [ main, feature/mvp-foundation, feature/driver-ci, feature/windows-service ]
+    branches: [ main, feature/mvp-foundation, feature/driver-ci, feature/windows-service, feature/productization ]
     tags:
       - "v*"
 
@@ -34,17 +34,29 @@ jobs:
             -p:PublishSingleFile=true -p:PublishTrimmed=false `
             -o out/Desktop
 
+      - name: Publish Setup
+        shell: pwsh
+        run: |
+          dotnet publish src/AI.Guard.Setup/AI.Guard.Setup.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:PublishTrimmed=false `
+            -o out/Setup
+
       - name: Stage product package
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path package/config, package/scripts | Out-Null
+          New-Item -ItemType Directory -Force -Path package/config, package/scripts, package/docs | Out-Null
           Copy-Item -Recurse out/Agent package/Agent
           Copy-Item -Recurse out/Desktop package/Desktop
+          Copy-Item -Recurse out/Setup package/Setup
           Copy-Item config/policy.sample.json package/config/policy.sample.json
+          Copy-Item config/license-public.pem package/config/license-public.pem
           Copy-Item scripts/install.ps1 package/scripts/install.ps1
           Copy-Item scripts/uninstall.ps1 package/scripts/uninstall.ps1
           Copy-Item LICENSE.md package/LICENSE.md
           Copy-Item README.md package/README.md
+          Copy-Item docs/COMMERCIAL.md package/docs/COMMERCIAL.md
+          Copy-Item docs/PRODUCT_GUIDE.md package/docs/PRODUCT_GUIDE.md
 
           $signedDriverRoot = 'driver/signed'
           $inf = Join-Path $signedDriverRoot 'AIGuardFilter.inf'
@@ -79,7 +91,11 @@ jobs:
           Commit: $env:GITHUB_SHA
           Ref: $env:GITHUB_REF
           KernelDriverIncluded: $driverReady
+          Setup: Setup/AIGuard.Setup.exe
           AgentStartup: WindowsService
+          PersonalPrivateUse: Free
+          BusinessUse: PaidLicenseRequired
+          LicensePublicKeySha256: 43AB1207EB5B04A8027288F970FE1B6F315C7F688FF5D04B75F1357C373D6509
           "@ | Set-Content -Path package/BUILD_INFO.txt -Encoding UTF8
 
           Compress-Archive -Path package/* -DestinationPath ROOOMTECH-AI-Guard-Windows-x64.zip -Force
@@ -88,16 +104,30 @@ jobs:
         shell: pwsh
         run: |
           $root = (Resolve-Path package).Path
+          $uninstallKey = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ROOOMTECHAIGuard'
           try {
-            & "$root/scripts/install.ps1" -PackageRoot $root
+            & "$root/scripts/install.ps1" -PackageRoot $root -Usage Personal -AcceptLicense
             $service = Get-Service -Name AIGuardAgent -ErrorAction Stop
             if ($service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) {
               throw "AIGuardAgent did not reach Running state: $($service.Status)"
             }
-            Write-Host 'AIGuardAgent Windows Service reached Running state.'
+            if (-not (Test-Path "$root/Setup/AIGuard.Setup.exe")) {
+              throw 'Graphical Setup executable was not included in the package.'
+            }
+            if (-not (Test-Path $uninstallKey)) {
+              throw 'Windows uninstall registration was not created.'
+            }
+            $installedRoot = Join-Path $env:ProgramFiles 'ROOOMTECH\AI Guard'
+            if (-not (Test-Path (Join-Path $installedRoot 'Uninstall-AIGuard.cmd'))) {
+              throw 'Installed uninstaller launcher was not created.'
+            }
+            Write-Host 'Service, graphical Setup, Start Menu/Apps registration and installed uninstaller are present.'
           }
           finally {
             & "$root/scripts/uninstall.ps1"
+          }
+          if (Test-Path $uninstallKey) {
+            throw 'Windows uninstall registration remained after uninstall.'
           }
 
       - name: Upload Windows package
