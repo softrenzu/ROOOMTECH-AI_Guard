@@ -1,5 +1,9 @@
 param(
-    [string]$PackageRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$PackageRoot = (Split-Path -Parent $PSScriptRoot),
+    [ValidateSet('Personal', 'Business')]
+    [string]$Usage = 'Personal',
+    [string]$LicensePath = '',
+    [switch]$AcceptLicense
 )
 
 $ErrorActionPreference = 'Stop'
@@ -56,6 +60,24 @@ function Invoke-Sc {
 
 Assert-Administrator
 
+if (-not $AcceptLicense) {
+    Write-Host ''
+    Write-Host 'ROOOMTECH AI Guard 利用条件'
+    Write-Host '  個人の私的利用: 無償'
+    Write-Host '  法人・団体・業務利用: 有償・個別見積（Businessライセンス必須）'
+    $answer = Read-Host 'LICENSE.mdの利用条件に同意する場合は YES と入力してください'
+    if ($answer -ne 'YES') {
+        throw '利用条件への同意がないためインストールを中止しました。'
+    }
+}
+
+if ($Usage -eq 'Business' -and [string]::IsNullOrWhiteSpace($LicensePath)) {
+    throw '法人・団体・業務利用では -LicensePath にROOOMTECH発行のBusinessライセンスを指定してください。'
+}
+if ($Usage -eq 'Business' -and -not (Test-Path $LicensePath -PathType Leaf)) {
+    throw "Businessライセンスが見つかりません: $LicensePath"
+}
+
 $installRoot = Join-Path $env:ProgramFiles 'ROOOMTECH\AI Guard'
 $dataRoot = Join-Path $env:ProgramData 'ROOOMTECH\AIGuard'
 $agentSource = Join-Path $PackageRoot 'Agent'
@@ -73,6 +95,7 @@ if (-not (Test-Path (Join-Path $desktopSource 'AIGuard.Desktop.exe'))) {
 }
 
 Write-Host 'ROOOMTECH AI Guard をインストールしています...'
+Write-Host "利用区分: $Usage"
 
 try { Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue } catch {}
 try { & schtasks.exe /End /TN $legacyTaskName 2>$null | Out-Null } catch {}
@@ -86,6 +109,21 @@ if (Test-Path $desktopDest) { Remove-Item -Recurse -Force $desktopDest }
 New-Item -ItemType Directory -Force -Path $agentDest, $desktopDest | Out-Null
 Copy-Item -Recurse -Force (Join-Path $agentSource '*') $agentDest
 Copy-Item -Recurse -Force (Join-Path $desktopSource '*') $desktopDest
+
+$agentExe = Join-Path $agentDest 'AIGuard.exe'
+$installedLicensePath = Join-Path $dataRoot 'license.json'
+$usageModePath = Join-Path $dataRoot 'usage-mode.txt'
+
+if ($Usage -eq 'Business') {
+    & $agentExe license-check $LicensePath | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw 'Businessライセンスの署名または有効期限を検証できませんでした。'
+    }
+    Copy-Item -Force $LicensePath $installedLicensePath
+    Set-Content -Path $usageModePath -Value 'Business' -Encoding ASCII
+} else {
+    Set-Content -Path $usageModePath -Value 'Personal' -Encoding ASCII
+}
 
 $policyPath = Join-Path $dataRoot 'policy.json'
 if (-not (Test-Path $policyPath) -and (Test-Path $configSource)) {
@@ -109,7 +147,6 @@ elseif ((Test-Path $inf) -or (Test-Path $sys) -or (Test-Path $cat)) {
     Write-Warning 'Driver files were found, but a valid Microsoft-signed catalog package was not verified. Kernel Driver installation was skipped.'
 }
 
-$agentExe = Join-Path $installRoot 'Agent\AIGuard.exe'
 $serviceBinPath = '"' + $agentExe + '" service'
 $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 
@@ -145,6 +182,8 @@ Write-Host ''
 Write-Host 'インストール完了'
 Write-Host "管理画面: $desktopExe"
 Write-Host "設定: $policyPath"
+Write-Host "利用区分: $Usage"
+if ($Usage -eq 'Business') { Write-Host "法人ライセンス: $installedLicensePath" }
 Write-Host "Agent Service: $($service.Status) / 自動起動"
 if ($filterRunning) {
     Write-Host 'Kernel Driver: 稼働中・ポリシー同期対象'
@@ -154,6 +193,4 @@ if ($filterRunning) {
     Write-Warning 'Microsoft署名済みKernel Driverが含まれていないため、Kernelレベルの強制保護はまだ有効ではありません。'
 }
 
-# Optional legacy-task and filter probes must not leak a stale native exit code
-# after a successful installation.
 $global:LASTEXITCODE = 0
