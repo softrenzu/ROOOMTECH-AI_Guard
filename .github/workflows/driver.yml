@@ -23,20 +23,36 @@ jobs:
       - name: Add WDK tools to PATH
         shell: pwsh
         run: |
+          function Find-HostTool([string]$tool) {
+            $candidates = @(Get-ChildItem -Path .\packages -Filter $tool -Recurse -File -ErrorAction SilentlyContinue)
+            if ($candidates.Count -eq 0) {
+              return $null
+            }
+
+            $preferred = $candidates | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+            if (-not $preferred) {
+              $preferred = $candidates | Where-Object { $_.FullName -match '\\x86\\' } | Select-Object -First 1
+            }
+            if (-not $preferred) {
+              $preferred = $candidates | Where-Object { $_.FullName -notmatch '\\ARM64\\|\\arm64\\' } | Select-Object -First 1
+            }
+            return $preferred
+          }
+
           $required = @('stampinf.exe')
           $optional = @('Inf2Cat.exe', 'signtool.exe')
 
           foreach ($tool in $required) {
-            $match = Get-ChildItem -Path .\packages -Filter $tool -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            $match = Find-HostTool $tool
             if (-not $match) {
-              throw "$tool was not found in restored WDK packages."
+              throw "$tool was not found for an x64/x86 host in restored WDK packages."
             }
             Write-Host "$tool => $($match.FullName)"
             Add-Content -Path $env:GITHUB_PATH -Value $match.DirectoryName
           }
 
           foreach ($tool in $optional) {
-            $match = Get-ChildItem -Path .\packages -Filter $tool -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            $match = Find-HostTool $tool
             if ($match) {
               Write-Host "$tool => $($match.FullName)"
               Add-Content -Path $env:GITHUB_PATH -Value $match.DirectoryName
