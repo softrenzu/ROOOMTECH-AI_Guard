@@ -1,5 +1,6 @@
 using System.IO.Pipes;
 using System.Security.Cryptography;
+using System.ServiceProcess;
 using System.Text;
 using System.Text.Json;
 using Rooomtech.AIGuard.Agent;
@@ -51,6 +52,19 @@ switch (args[0].ToLowerInvariant())
         return;
     }
 
+    case "service":
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            Console.Error.WriteLine("Windows Service mode is only supported on Windows.");
+            Environment.ExitCode = 2;
+            return;
+        }
+
+        ServiceBase.Run(new AiGuardWindowsService());
+        return;
+    }
+
     case "serve":
     {
         Console.WriteLine("ROOOMTECH AI Guard agent");
@@ -58,12 +72,7 @@ switch (args[0].ToLowerInvariant())
         Console.WriteLine($"Audit : {auditPath}");
         Console.WriteLine("Pipe  : ROOOMTECH_AIGuard");
 
-        var initialPolicy = JsonPolicyStore.Load(policyPath);
-        if (DriverPolicyBridge.TryPushPolicy(initialPolicy, out var driverMessage))
-            Console.WriteLine(driverMessage);
-        else
-            Console.WriteLine($"Driver sync pending: {driverMessage}");
-
+        _ = EnsureDriverSynchronizationAsync(policyPath);
         await RunServerAsync(policyPath, auditPath, jsonOptions);
         return;
     }
@@ -73,6 +82,30 @@ switch (args[0].ToLowerInvariant())
         PrintHelp();
         Environment.ExitCode = 2;
         return;
+}
+
+static async Task EnsureDriverSynchronizationAsync(string policyPath)
+{
+    while (true)
+    {
+        try
+        {
+            var policy = JsonPolicyStore.Load(policyPath);
+            if (DriverPolicyBridge.TryPushPolicy(policy, out var message))
+            {
+                Console.WriteLine(message);
+                return;
+            }
+
+            Console.WriteLine($"Driver sync pending: {message}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Driver sync pending: {ex.Message}");
+        }
+
+        await Task.Delay(TimeSpan.FromSeconds(10));
+    }
 }
 
 static AccessRequest BuildRequest(GuardPolicy policy, string filePath, string processPath, string operation)
@@ -213,10 +246,13 @@ Commands:
       Evaluate one access request and write an audit record.
 
   AIGuard sync-driver
-      Push the current policy to the installed minifilter driver.
+      Load the installed minifilter if needed and push the current policy.
 
   AIGuard serve
-      Start the local named-pipe policy agent and synchronize the driver.
+      Start the local named-pipe policy agent and keep retrying driver synchronization until available.
+
+  AIGuard service
+      Run under the Windows Service Control Manager.
 
 Environment:
   AIGUARD_POLICY

@@ -22,7 +22,7 @@ ChatGPT、Claude、Gemini等のサービスそのものを判定するのでは�
 
 **1.0.0 Release Candidate**
 
-管理GUI、Policy Agent、動的Driverポリシー同期、配布パッケージ生成まで実装済みです。一般のWindows 11へKernel Driverを配布するために必要なMicrosoft正式AltitudeおよびDriver署名は外部リリースゲートです。詳細は [docs/PRODUCTION_RELEASE.md](docs/PRODUCTION_RELEASE.md) を参照してください。
+管理GUI、Policy Agent、Windows Service常駐、動的Driverポリシー同期、配布パッケージ生成まで実装済みです。一般のWindows 11へKernel Driverを配布するために必要なMicrosoft正式AltitudeおよびDriver署名は外部リリースゲートです。詳細は [docs/PRODUCTION_RELEASE.md](docs/PRODUCTION_RELEASE.md) を参照してください。
 
 ## 主な機能
 
@@ -32,7 +32,9 @@ ChatGPT、Claude、Gemini等のサービスそのものを判定するのでは�
 - 許可アプリ登録時にSHA-256を記録
 - Agent同期時に許可アプリのSHA-256を再検証
 - AgentからMinifilter Driverへポリシーを動的同期
-- AgentのWindows起動時自動実行
+- `AIGuardAgent` Windows Serviceとして自動起動
+- Agent異常終了時の自動再起動
+- 起動時にMinifilterが停止していれば自動ロードしてポリシーを再同期
 - Driver / Agent稼働状態表示
 - 監査ログ表示
 - Windows x64自己完結型配布ZIP生成
@@ -46,6 +48,9 @@ ChatGPT、Claude、Gemini等のサービスそのものを判定するのでは�
 policy.json
    |
    v
+AIGuardAgent Windows Service
+   |
+   v
 AI Guard Agent
    |
    | Filter Manager Communication Port
@@ -57,20 +62,22 @@ AI Guard Minifilter Driver
    +-- 未許可アプリ  -> STATUS_ACCESS_DENIED
 ~~~
 
-保護フォルダの閲覧自体は可能にしつつ、ファイル内容を読み取る要求を制御します。
+保護フォルダの閲覧自体は可能にしつつ、ファイル内容を読み取る要求を制御します。Windows再起動後は `AIGuardAgent` Serviceが自動起動し、Minifilterを必要に応じてロードして現在のポリシーを再同期します。
 
 ## Windows配布パッケージ
 
 GitHub Actionsの `windows-package` ワークフローが以下を含む `ROOOMTECH-AI-Guard-Windows-x64.zip` を生成します。
 
-- `Agent/` Policy Agent
+- `Agent/` Policy Agent / Windows Service実行ファイル
 - `Desktop/` 管理GUI
 - `scripts/install.ps1`
 - `scripts/uninstall.ps1`
-- `Driver/` Driverパッケージ領域
+- `Driver/` Microsoft署名済みDriverがある場合のみ同梱
 - `config/` 初期ポリシー
 
-署名済みDriverがまだ含まれないRCパッケージでは、GUIとAgentは利用できますがKernelレベルの強制保護は有効になりません。正式版では署名済みDriverを含めます。
+`scripts/install.ps1` は管理者権限で実行し、AgentをLocalSystemの自動起動Windows Service `AIGuardAgent` として登録します。旧RC版のScheduled Taskが存在する場合は削除し、Service障害時の再起動設定も行います。
+
+署名済みDriverがまだ含まれないRCパッケージでは、GUIとAgentは利用できますがKernelレベルの強制保護は有効になりません。正式版ではMicrosoft署名済みDriverを含めます。
 
 ## 開発環境での確認
 
@@ -89,7 +96,7 @@ dotnet run --project .\src\AI.Guard.Agent\AI.Guard.Agent.csproj -- check `
 
 未許可アプリの場合は `Allowed = false`、終了コード `10` になります。
 
-Agent:
+Agentをコンソールで起動する場合:
 
 ~~~powershell
 dotnet run --project .\src\AI.Guard.Agent\AI.Guard.Agent.csproj -- serve
@@ -100,6 +107,8 @@ Driver同期:
 ~~~powershell
 dotnet run --project .\src\AI.Guard.Agent\AI.Guard.Agent.csproj -- sync-driver
 ~~~
+
+通常のインストールでは `scripts/install.ps1` が `AIGuardAgent` Windows Serviceを登録するため、`serve` を手動起動する必要はありません。
 
 ## セキュリティ境界
 

@@ -2,7 +2,7 @@ name: dotnet
 
 on:
   push:
-    branches: [ main, feature/mvp-foundation, feature/driver-ci ]
+    branches: [ main, feature/mvp-foundation, feature/driver-ci, feature/windows-service ]
   pull_request:
     branches: [ main ]
 

@@ -3,7 +3,7 @@ name: windows-package
 on:
   workflow_dispatch:
   push:
-    branches: [ main, feature/mvp-foundation, feature/driver-ci ]
+    branches: [ main, feature/mvp-foundation, feature/driver-ci, feature/windows-service ]
     tags:
       - "v*"
 
@@ -79,9 +79,26 @@ jobs:
           Commit: $env:GITHUB_SHA
           Ref: $env:GITHUB_REF
           KernelDriverIncluded: $driverReady
+          AgentStartup: WindowsService
           "@ | Set-Content -Path package/BUILD_INFO.txt -Encoding UTF8
 
           Compress-Archive -Path package/* -DestinationPath ROOOMTECH-AI-Guard-Windows-x64.zip -Force
+
+      - name: Service install smoke test
+        shell: pwsh
+        run: |
+          $root = (Resolve-Path package).Path
+          try {
+            & "$root/scripts/install.ps1" -PackageRoot $root
+            $service = Get-Service -Name AIGuardAgent -ErrorAction Stop
+            if ($service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) {
+              throw "AIGuardAgent did not reach Running state: $($service.Status)"
+            }
+            Write-Host 'AIGuardAgent Windows Service reached Running state.'
+          }
+          finally {
+            & "$root/scripts/uninstall.ps1"
+          }
 
       - name: Upload Windows package
         uses: actions/upload-artifact@v4

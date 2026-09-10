@@ -2,7 +2,7 @@ name: driver
 
 on:
   push:
-    branches: [ main, feature/driver-ci ]
+    branches: [ main, feature/driver-ci, feature/windows-service ]
   pull_request:
     branches: [ main ]
 
