@@ -34,12 +34,21 @@ jobs:
             -p:PublishSingleFile=true -p:PublishTrimmed=false `
             -o out/Desktop
 
+      - name: Publish Setup
+        shell: pwsh
+        run: |
+          dotnet publish src/AI.Guard.Setup/AI.Guard.Setup.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:PublishTrimmed=false `
+            -o out/Setup
+
       - name: Stage product package
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path package/config, package/scripts, package/docs | Out-Null
           Copy-Item -Recurse out/Agent package/Agent
           Copy-Item -Recurse out/Desktop package/Desktop
+          Copy-Item -Recurse out/Setup package/Setup
           Copy-Item config/policy.sample.json package/config/policy.sample.json
           Copy-Item config/license-public.pem package/config/license-public.pem
           Copy-Item scripts/install.ps1 package/scripts/install.ps1
@@ -82,6 +91,7 @@ jobs:
           Commit: $env:GITHUB_SHA
           Ref: $env:GITHUB_REF
           KernelDriverIncluded: $driverReady
+          Setup: Setup/AIGuard.Setup.exe
           AgentStartup: WindowsService
           PersonalPrivateUse: Free
           BusinessUse: PaidLicenseRequired
@@ -100,7 +110,10 @@ jobs:
             if ($service.Status -ne [System.ServiceProcess.ServiceControllerStatus]::Running) {
               throw "AIGuardAgent did not reach Running state: $($service.Status)"
             }
-            Write-Host 'AIGuardAgent Windows Service reached Running state.'
+            if (-not (Test-Path "$root/Setup/AIGuard.Setup.exe")) {
+              throw 'Graphical Setup executable was not included in the package.'
+            }
+            Write-Host 'AIGuardAgent Windows Service reached Running state and Setup executable is present.'
           }
           finally {
             & "$root/scripts/uninstall.ps1"
