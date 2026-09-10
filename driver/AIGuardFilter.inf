@@ -3,7 +3,7 @@ Signature   = "$WINDOWS NT$"
 Class       = "ActivityMonitor"
 ClassGuid   = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}
 Provider    = %ManufacturerName%
-DriverVer   = 09/10/2026,0.1.0.0
+DriverVer   = 09/10/2026,1.0.0.0
 CatalogFile = AIGuardFilter.cat
 
 [DestinationDirs]
@@ -17,7 +17,7 @@ CopyFiles = AIGuard.DriverFiles
 AddService = %ServiceName%,,AIGuard.Service
 
 [AIGuard.Service]
-DisplayName    = %ServiceName%
+DisplayName    = %ServiceDisplayName%
 Description    = %ServiceDescription%
 ServiceBinary  = %12%\AIGuardFilter.sys
 Dependencies   = FltMgr
@@ -42,8 +42,9 @@ AIGuardFilter.sys = 1
 1 = %DiskName%,,,
 
 [Strings]
-ManufacturerName   = "ROOOMTECH"
-ServiceName        = "ROOOMTECH AI Guard Filter"
+ManufacturerName   = "ROOOMTECH株式会社"
+ServiceName        = "AIGuardFilter"
+ServiceDisplayName = "ROOOMTECH AI Guard Filter"
 ServiceDescription = "ROOOMTECH AI Guard file system minifilter"
 DefaultInstance    = "AIGuard Instance"
 Altitude           = "385201"
