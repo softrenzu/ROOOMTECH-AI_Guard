@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Rooomtech.AIGuard.Agent;
 using Rooomtech.AIGuard.Core;
 
 var jsonOptions = new JsonSerializerOptions
@@ -12,6 +13,7 @@ var jsonOptions = new JsonSerializerOptions
 
 var policyPath = ResolvePolicyPath();
 EnsureInitialPolicy(policyPath);
+var auditPath = ResolveAuditPath();
 
 if (args.Length == 0 || string.Equals(args[0], "help", StringComparison.OrdinalIgnoreCase))
 {
@@ -19,13 +21,10 @@ if (args.Length == 0 || string.Equals(args[0], "help", StringComparison.OrdinalI
     return;
 }
 
-var policy = JsonPolicyStore.Load(policyPath);
-var evaluator = new PolicyEvaluator(policy);
-var auditPath = ResolveAuditPath();
-
 switch (args[0].ToLowerInvariant())
 {
     case "check":
+    {
         if (args.Length < 3)
         {
             Console.Error.WriteLine("Usage: AIGuard check <file-path> <process-path> [operation]");
@@ -33,20 +32,41 @@ switch (args[0].ToLowerInvariant())
             return;
         }
 
+        var policy = JsonPolicyStore.Load(policyPath);
+        var evaluator = new PolicyEvaluator(policy);
         var checkRequest = BuildRequest(policy, args[1], args[2], args.Length >= 4 ? args[3] : "read");
         var decision = evaluator.Evaluate(checkRequest);
         AppendAudit(auditPath, new AuditRecord { Request = checkRequest, Decision = decision }, jsonOptions);
         Console.WriteLine(JsonSerializer.Serialize(decision, jsonOptions));
         Environment.ExitCode = decision.Allowed ? 0 : 10;
         return;
+    }
+
+    case "sync-driver":
+    {
+        var policy = JsonPolicyStore.Load(policyPath);
+        var ok = DriverPolicyBridge.TryPushPolicy(policy, out var message);
+        Console.WriteLine(message);
+        Environment.ExitCode = ok ? 0 : 20;
+        return;
+    }
 
     case "serve":
-        Console.WriteLine($"ROOOMTECH AI Guard agent");
+    {
+        Console.WriteLine("ROOOMTECH AI Guard agent");
         Console.WriteLine($"Policy: {policyPath}");
         Console.WriteLine($"Audit : {auditPath}");
         Console.WriteLine("Pipe  : ROOOMTECH_AIGuard");
-        await RunServerAsync(evaluator, policy, auditPath, jsonOptions);
+
+        var initialPolicy = JsonPolicyStore.Load(policyPath);
+        if (DriverPolicyBridge.TryPushPolicy(initialPolicy, out var driverMessage))
+            Console.WriteLine(driverMessage);
+        else
+            Console.WriteLine($"Driver sync pending: {driverMessage}");
+
+        await RunServerAsync(policyPath, auditPath, jsonOptions);
         return;
+    }
 
     default:
         Console.Error.WriteLine($"Unknown command: {args[0]}");
@@ -83,8 +103,7 @@ static AccessRequest BuildRequest(GuardPolicy policy, string filePath, string pr
 }
 
 static async Task RunServerAsync(
-    PolicyEvaluator evaluator,
-    GuardPolicy policy,
+    string policyPath,
     string auditPath,
     JsonSerializerOptions jsonOptions)
 {
@@ -108,6 +127,8 @@ static async Task RunServerAsync(
 
         try
         {
+            var policy = JsonPolicyStore.Load(policyPath);
+            var evaluator = new PolicyEvaluator(policy);
             var request = JsonSerializer.Deserialize<AccessRequest>(line, jsonOptions)
                           ?? throw new InvalidDataException("Request was empty.");
 
@@ -191,16 +212,20 @@ Commands:
   AIGuard check <file-path> <process-path> [operation]
       Evaluate one access request and write an audit record.
 
+  AIGuard sync-driver
+      Push the current policy to the installed minifilter driver.
+
   AIGuard serve
-      Start the local named-pipe policy agent.
+      Start the local named-pipe policy agent and synchronize the driver.
 
 Environment:
   AIGUARD_POLICY
       Optional path to policy.json.
 
 Exit codes:
-  0   Allowed
+  0   Allowed / success
   10  Denied
+  20  Driver synchronization failed
   2   Invalid command
 """);
 }
