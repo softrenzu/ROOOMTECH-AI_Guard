@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using Rooomtech.AIGuard.Core;
 
@@ -23,7 +24,7 @@ internal static class DriverPolicyBridge
                 throw new InvalidOperationException($"許可アプリは最大{MaxAllowedApps}件です。");
 
             var protectedPaths = policy.ProtectedPaths.Select(ToNtPath).ToArray();
-            var allowedApps = policy.AllowedApplications.Select(a => ToNtPath(a.ExecutablePath)).ToArray();
+            var allowedApps = policy.AllowedApplications.Select(ToVerifiedNtPath).ToArray();
             var payload = BuildPayload(protectedPaths, allowedApps);
 
             var hr = FilterConnectCommunicationPort(PortName, 0, IntPtr.Zero, 0, IntPtr.Zero, out var port);
@@ -55,6 +56,23 @@ internal static class DriverPolicyBridge
             message = ex.Message;
             return false;
         }
+    }
+
+    private static string ToVerifiedNtPath(AllowedApplication app)
+    {
+        var fullPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(app.ExecutablePath.Trim().Trim('"')));
+        if (!string.IsNullOrWhiteSpace(app.Sha256))
+        {
+            if (!File.Exists(fullPath))
+                throw new FileNotFoundException("SHA-256固定済みの許可アプリが見つかりません。", fullPath);
+
+            using var stream = File.OpenRead(fullPath);
+            var actual = Convert.ToHexString(SHA256.HashData(stream));
+            if (!string.Equals(actual, app.Sha256, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"許可アプリのSHA-256が変更されています。再登録してください: {fullPath}");
+        }
+
+        return ToNtPath(fullPath);
     }
 
     private static byte[] BuildPayload(IReadOnlyList<string> protectedPaths, IReadOnlyList<string> allowedApps)
@@ -89,6 +107,10 @@ internal static class DriverPolicyBridge
     private static string ToNtPath(string path)
     {
         var full = Path.GetFullPath(Environment.ExpandEnvironmentVariables(path.Trim().Trim('"')));
+
+        if (full.StartsWith(@"\\", StringComparison.Ordinal))
+            return @"\Device\Mup" + full[1..];
+
         if (full.Length < 2 || full[1] != ':')
             return full;
 
@@ -97,8 +119,12 @@ internal static class DriverPolicyBridge
         if (QueryDosDevice(drive, target, target.Capacity) == 0)
             throw new Win32Exception(Marshal.GetLastWin32Error(), $"ドライブをNTパスへ変換できません: {drive}");
 
-        var device = target.ToString().Split('\0', StringSplitOptions.RemoveEmptyEntries)[0];
-        return device.TrimEnd('\') + full[2..];
+        var device = target.ToString();
+        var nullIndex = device.IndexOf('\0');
+        if (nullIndex >= 0)
+            device = device[..nullIndex];
+
+        return device.TrimEnd('\\') + full[2..];
     }
 
     [DllImport("fltlib.dll", CharSet = CharSet.Unicode)]
