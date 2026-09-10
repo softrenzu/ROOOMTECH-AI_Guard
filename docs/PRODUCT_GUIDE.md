@@ -13,27 +13,31 @@ ROOOMTECH AI Guardは、Windows 11上の指定フォルダを保護し、許可�
 
 ## 3. インストール
 
-管理者PowerShellで実行します。
+配布ZIPを展開し、`Setup\AIGuard.Setup.exe` をダブルクリックします。UACの確認後、画面上で利用区分を選択します。
 
 ### 個人私的利用
 
-```powershell
-.\scripts\install.ps1 -Usage Personal
-```
-
-利用条件が表示されます。内容を確認し、同意する場合は `YES` を入力します。
+「個人による私的利用（無償）」を選択し、利用条件を確認・同意して「インストール」を押します。
 
 ### 法人・団体・業務利用
 
+「法人・団体・業務利用（有償・個別見積）」を選択し、ROOOMTECH株式会社から受領したBusinessライセンスJSONを指定します。
+
+セットアップはライセンスの署名、製品名、利用期間を検証します。検証できない場合は法人利用としてインストールできません。
+
+管理者向けの自動展開では、PowerShellによるサイレント相当のインストールも利用できます。
+
 ```powershell
-.\scripts\install.ps1 -Usage Business -LicensePath "C:\path\company.aiguard-license.json"
+.\scripts\install.ps1 -Usage Personal -AcceptLicense
 ```
 
-インストーラーは法人ライセンスの署名・製品名・有効期間を検証します。検証できない場合は法人利用としてインストールを完了しません。
+```powershell
+.\scripts\install.ps1 -Usage Business -LicensePath "C:\path\company.aiguard-license.json" -AcceptLicense
+```
 
 ## 4. 初期設定
 
-インストール後、デスクトップの `ROOOMTECH AI Guard` を起動します。
+インストール後、デスクトップまたはスタートメニューの `ROOOMTECH AI Guard` を起動します。
 
 1. 「保護設定」で保護フォルダを追加します。
 2. 保護ファイルを開くことを許可するアプリを追加します。
@@ -54,11 +58,11 @@ ROOOMTECH AI Guardは、Windows 11上の指定フォルダを保護し、許可�
 
 ## 7. アンインストール
 
-管理者PowerShellで次を実行します。
+Windowsの「設定 > アプリ > インストールされているアプリ」から `ROOOMTECH AI Guard` を選んでアンインストールできます。
 
-```powershell
-.\scripts\uninstall.ps1
-```
+スタートメニューの `ROOOMTECH AI Guard > アンインストール` も利用できます。
+
+管理者向けには配布ZIPの `scripts\uninstall.ps1` から削除することもできます。
 
 ## 8. 注意事項
 
