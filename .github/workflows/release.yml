@@ -3,6 +3,7 @@ name: windows-package
 on:
   workflow_dispatch:
   push:
+    branches: [ main, feature/mvp-foundation ]
     tags:
       - "v*"
 
