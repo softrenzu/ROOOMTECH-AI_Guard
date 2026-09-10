@@ -211,8 +211,8 @@ Set-ItemProperty -Path $uninstallKey -Name Publisher -Value 'ROOOMTECH株式会�
 Set-ItemProperty -Path $uninstallKey -Name InstallLocation -Value $installRoot
 Set-ItemProperty -Path $uninstallKey -Name DisplayIcon -Value $desktopExe
 Set-ItemProperty -Path $uninstallKey -Name UninstallString -Value ('"' + $uninstallLauncher + '"')
-Set-ItemProperty -Path $uninstallKey -Name NoModify -Type DWord -Value 1
-Set-ItemProperty -Path $uninstallKey -Name NoRepair -Type DWord -Value 1
+New-ItemProperty -Path $uninstallKey -Name NoModify -PropertyType DWord -Value 1 -Force | Out-Null
+New-ItemProperty -Path $uninstallKey -Name NoRepair -PropertyType DWord -Value 1 -Force | Out-Null
 
 Start-Sleep -Milliseconds 750
 $service = Get-Service -Name $serviceName -ErrorAction Stop
