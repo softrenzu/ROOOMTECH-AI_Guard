@@ -9,8 +9,8 @@ namespace Rooomtech.AIGuard.Agent;
 internal static class DriverPolicyBridge
 {
     private const string PortName = @"\ROOOMTECHAIGuardPort";
-    private const int MaxProtectedPaths = 8;
-    private const int MaxAllowedApps = 32;
+    private const int MaxProtectedPaths = PolicySafety.MaxProtectedPaths;
+    private const int MaxAllowedApps = PolicySafety.MaxAllowedApplications;
     private const int PathChars = 520;
     private const uint PolicyVersion = 1;
 
@@ -18,10 +18,7 @@ internal static class DriverPolicyBridge
     {
         try
         {
-            if (policy.ProtectedPaths.Count > MaxProtectedPaths)
-                throw new InvalidOperationException($"保護フォルダは最大{MaxProtectedPaths}件です。");
-            if (policy.AllowedApplications.Count > MaxAllowedApps)
-                throw new InvalidOperationException($"許可アプリは最大{MaxAllowedApps}件です。");
+            PolicySafety.ValidateForEnforcement(policy);
 
             var protectedPaths = policy.ProtectedPaths.Select(ToNtPath).ToArray();
             var allowedApps = policy.AllowedApplications.Select(ToVerifiedNtPath).ToArray();
