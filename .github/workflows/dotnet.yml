@@ -23,6 +23,9 @@ jobs:
       - name: Restore Desktop
         run: dotnet restore src/AI.Guard.Desktop/AI.Guard.Desktop.csproj
 
+      - name: Restore Setup
+        run: dotnet restore src/AI.Guard.Setup/AI.Guard.Setup.csproj
+
       - name: Restore License Issuer
         run: dotnet restore tools/AI.Guard.LicenseIssuer/AI.Guard.LicenseIssuer.csproj
 
@@ -34,6 +37,9 @@ jobs:
 
       - name: Build Desktop
         run: dotnet build src/AI.Guard.Desktop/AI.Guard.Desktop.csproj --configuration Release --no-restore
+
+      - name: Build Setup
+        run: dotnet build src/AI.Guard.Setup/AI.Guard.Setup.csproj --configuration Release --no-restore
 
       - name: Build License Issuer
         run: dotnet build tools/AI.Guard.LicenseIssuer/AI.Guard.LicenseIssuer.csproj --configuration Release --no-restore
