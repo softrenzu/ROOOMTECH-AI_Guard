@@ -2,7 +2,7 @@ name: dotnet
 
 on:
   push:
-    branches: [ main, feature/mvp-foundation, feature/driver-ci, feature/windows-service ]
+    branches: [ main, feature/mvp-foundation, feature/driver-ci, feature/windows-service, feature/productization ]
   pull_request:
     branches: [ main ]
 
@@ -23,6 +23,9 @@ jobs:
       - name: Restore Desktop
         run: dotnet restore src/AI.Guard.Desktop/AI.Guard.Desktop.csproj
 
+      - name: Restore License Issuer
+        run: dotnet restore tools/AI.Guard.LicenseIssuer/AI.Guard.LicenseIssuer.csproj
+
       - name: Restore Tests
         run: dotnet restore tests/AI.Guard.Core.Tests/AI.Guard.Core.Tests.csproj
 
@@ -31,6 +34,9 @@ jobs:
 
       - name: Build Desktop
         run: dotnet build src/AI.Guard.Desktop/AI.Guard.Desktop.csproj --configuration Release --no-restore
+
+      - name: Build License Issuer
+        run: dotnet build tools/AI.Guard.LicenseIssuer/AI.Guard.LicenseIssuer.csproj --configuration Release --no-restore
 
       - name: Run Core Tests
         run: dotnet test tests/AI.Guard.Core.Tests/AI.Guard.Core.Tests.csproj --configuration Release --no-restore --verbosity normal
