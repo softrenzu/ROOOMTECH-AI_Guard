@@ -12,6 +12,40 @@ function Assert-Administrator {
     }
 }
 
+function Test-MicrosoftSignedCatalog {
+    param([Parameter(Mandatory = $true)][string]$CatalogPath)
+
+    if (-not (Test-Path $CatalogPath -PathType Leaf)) {
+        return $false
+    }
+
+    try {
+        $signature = Get-AuthenticodeSignature -FilePath $CatalogPath
+        if ($signature.Status -ne [System.Management.Automation.SignatureStatus]::Valid) {
+            Write-Warning "Driver catalog signature is not valid: $($signature.Status)"
+            return $false
+        }
+
+        if ($null -eq $signature.SignerCertificate) {
+            Write-Warning 'Driver catalog has no signer certificate.'
+            return $false
+        }
+
+        $subject = $signature.SignerCertificate.Subject
+        if ($subject -notmatch 'Microsoft') {
+            Write-Warning "Driver catalog is not Microsoft signed: $subject"
+            return $false
+        }
+
+        Write-Host "Microsoft signed driver catalog verified: $subject"
+        return $true
+    }
+    catch {
+        Write-Warning "Driver catalog signature verification failed: $($_.Exception.Message)"
+        return $false
+    }
+}
+
 Assert-Administrator
 
 $installRoot = Join-Path $env:ProgramFiles 'ROOOMTECH\AI Guard'
@@ -57,11 +91,20 @@ $shortcut.Save()
 $driverInstalled = $false
 $inf = Join-Path $driverSource 'AIGuardFilter.inf'
 $sys = Join-Path $driverSource 'AIGuardFilter.sys'
-if ((Test-Path $inf) -and (Test-Path $sys)) {
-    Write-Host '署名済みKernel Driverをインストールしています...'
+$cat = Join-Path $driverSource 'AIGuardFilter.cat'
+
+if ((Test-Path $inf) -and (Test-Path $sys) -and (Test-MicrosoftSignedCatalog $cat)) {
+    Write-Host 'Microsoft署名済みKernel Driverをインストールしています...'
     & pnputil.exe /add-driver $inf /install | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Kernel Driver package installation failed. pnputil exit code: $LASTEXITCODE"
+    }
+
     & fltmc.exe load AIGuardFilter 2>$null
     $driverInstalled = ($LASTEXITCODE -eq 0)
+}
+elseif ((Test-Path $inf) -or (Test-Path $sys) -or (Test-Path $cat)) {
+    Write-Warning 'Driver files were found, but a valid Microsoft-signed catalog package was not verified. Kernel Driver installation was skipped.'
 }
 
 Write-Host ''
@@ -71,5 +114,5 @@ Write-Host "設定: $policyPath"
 if ($driverInstalled) {
     Write-Host 'Kernel Driver: 稼働中'
 } else {
-    Write-Warning '署名済みKernel Driverがパッケージに含まれていないため、Kernelレベルの強制保護はまだ有効ではありません。'
+    Write-Warning 'Microsoft署名済みKernel Driverが確認できないため、Kernelレベルの強制保護はまだ有効ではありません。'
 }
