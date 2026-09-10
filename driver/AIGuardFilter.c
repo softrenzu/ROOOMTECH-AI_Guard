@@ -21,6 +21,7 @@ typedef struct _AIGUARD_POLICY_MESSAGE {
 } AIGUARD_POLICY_MESSAGE, *PAIGUARD_POLICY_MESSAGE;
 
 AIGUARD_POLICY_MESSAGE gPolicy;
+BOOLEAN gPolicyConfigured = FALSE;
 static const WCHAR* gProtectedMarker = L"\\AI_Guard_Protected\\";
 
 DRIVER_INITIALIZE DriverEntry;
@@ -126,19 +127,23 @@ static BOOLEAN AiGuardPathIsProtected(_In_ PCUNICODE_STRING FileName)
 {
     ULONG i;
     ULONG configuredCount;
+    BOOLEAN configured;
     BOOLEAN result = FALSE;
 
     ExAcquireResourceSharedLite(&gPolicyLock, TRUE);
+    configured = gPolicyConfigured;
     configuredCount = gPolicy.ProtectedPathCount;
-    for (i = 0; i < configuredCount && i < AIGUARD_MAX_PROTECTED_PATHS; i++) {
-        if (AiGuardUnicodeStartsWithInsensitive(FileName, gPolicy.ProtectedPaths[i])) {
-            result = TRUE;
-            break;
+    if (configured) {
+        for (i = 0; i < configuredCount && i < AIGUARD_MAX_PROTECTED_PATHS; i++) {
+            if (AiGuardUnicodeStartsWithInsensitive(FileName, gPolicy.ProtectedPaths[i])) {
+                result = TRUE;
+                break;
+            }
         }
     }
     ExReleaseResourceLite(&gPolicyLock);
 
-    if (!result && configuredCount == 0)
+    if (!configured)
         result = AiGuardUnicodeContainsInsensitive(FileName, gProtectedMarker);
 
     return result;
@@ -157,6 +162,7 @@ static BOOLEAN AiGuardProcessIsAllowed(void)
     NTSTATUS status;
     ULONG i;
     ULONG configuredCount;
+    BOOLEAN configured;
     BOOLEAN allowed = FALSE;
 
     if (PsGetCurrentProcessId() == (HANDLE)4)
@@ -167,18 +173,21 @@ static BOOLEAN AiGuardProcessIsAllowed(void)
         return FALSE;
 
     ExAcquireResourceSharedLite(&gPolicyLock, TRUE);
+    configured = gPolicyConfigured;
     configuredCount = gPolicy.AllowedApplicationCount;
-    for (i = 0; i < configuredCount && i < AIGUARD_MAX_ALLOWED_APPS; i++) {
-        UNICODE_STRING allowedImage;
-        RtlInitUnicodeString(&allowedImage, gPolicy.AllowedApplications[i]);
-        if (RtlEqualUnicodeString(processImage, &allowedImage, TRUE)) {
-            allowed = TRUE;
-            break;
+    if (configured) {
+        for (i = 0; i < configuredCount && i < AIGUARD_MAX_ALLOWED_APPS; i++) {
+            UNICODE_STRING allowedImage;
+            RtlInitUnicodeString(&allowedImage, gPolicy.AllowedApplications[i]);
+            if (RtlEqualUnicodeString(processImage, &allowedImage, TRUE)) {
+                allowed = TRUE;
+                break;
+            }
         }
     }
     ExReleaseResourceLite(&gPolicyLock);
 
-    if (!allowed && configuredCount == 0) {
+    if (!configured) {
         for (i = 0; i < RTL_NUMBER_OF(fallbackAllowedSuffixes); i++) {
             if (AiGuardUnicodeContainsInsensitive(processImage, fallbackAllowedSuffixes[i])) {
                 allowed = TRUE;
@@ -327,6 +336,7 @@ NTSTATUS AiGuardMessageNotify(
 
     ExAcquireResourceExclusiveLite(&gPolicyLock, TRUE);
     RtlCopyMemory(&gPolicy, incoming, sizeof(AIGUARD_POLICY_MESSAGE));
+    gPolicyConfigured = TRUE;
     ExReleaseResourceLite(&gPolicyLock);
 
     ExFreePoolWithTag(incoming, AIGUARD_POOL_TAG);
@@ -366,6 +376,8 @@ NTSTATUS DriverEntry(
     UNREFERENCED_PARAMETER(RegistryPath);
 
     RtlZeroMemory(&gPolicy, sizeof(gPolicy));
+    gPolicyConfigured = FALSE;
+
     status = ExInitializeResourceLite(&gPolicyLock);
     if (!NT_SUCCESS(status))
         return status;
