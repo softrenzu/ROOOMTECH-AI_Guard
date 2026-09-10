@@ -17,11 +17,17 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Restore
+      - name: Restore Agent
         run: dotnet restore src/AI.Guard.Agent/AI.Guard.Agent.csproj
 
-      - name: Build
+      - name: Restore Desktop
+        run: dotnet restore src/AI.Guard.Desktop/AI.Guard.Desktop.csproj
+
+      - name: Build Agent
         run: dotnet build src/AI.Guard.Agent/AI.Guard.Agent.csproj --configuration Release --no-restore
+
+      - name: Build Desktop
+        run: dotnet build src/AI.Guard.Desktop/AI.Guard.Desktop.csproj --configuration Release --no-restore
 
       - name: Smoke test
         shell: pwsh
