@@ -14,6 +14,8 @@ internal static class DriverPolicyBridge
     private const int MaxAllowedApps = PolicySafety.MaxAllowedApplications;
     private const int PathChars = 520;
     private const uint PolicyVersion = 1;
+    private const int DriverConnectAttempts = 10;
+    private const int DriverConnectDelayMs = 250;
 
     public static bool TryPushPolicy(GuardPolicy policy, out string message)
     {
@@ -28,11 +30,16 @@ internal static class DriverPolicyBridge
             var hr = FilterConnectCommunicationPort(PortName, 0, IntPtr.Zero, 0, IntPtr.Zero, out var port);
             if (hr != 0)
             {
-                // The minifilter is demand-start. On boot the Windows service may run before
-                // the filter has been loaded, so ask Filter Manager to load it and retry.
+                // The minifilter is demand-start. On boot the Windows service can run before
+                // the filter has been loaded. Ask Filter Manager to load it, then tolerate a
+                // short startup window before declaring synchronization unavailable.
                 _ = FilterLoad(FilterName);
-                Thread.Sleep(250);
-                hr = FilterConnectCommunicationPort(PortName, 0, IntPtr.Zero, 0, IntPtr.Zero, out port);
+
+                for (var attempt = 0; attempt < DriverConnectAttempts && hr != 0; attempt++)
+                {
+                    Thread.Sleep(DriverConnectDelayMs);
+                    hr = FilterConnectCommunicationPort(PortName, 0, IntPtr.Zero, 0, IntPtr.Zero, out port);
+                }
             }
 
             if (hr != 0)
