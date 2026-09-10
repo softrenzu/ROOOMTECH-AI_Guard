@@ -16,6 +16,10 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Restore WDK and SDK NuGet packages
+        shell: pwsh
+        run: nuget restore .\packages.config -PackagesDirectory .\packages\
+
       - name: Build x64 Release minifilter
         shell: pwsh
         run: |
