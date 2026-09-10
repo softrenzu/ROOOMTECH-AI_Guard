@@ -1,0 +1,21 @@
+To: fsfcomm@microsoft.com
+Subject: Filter altitude request
+
+Hi,
+
+Below is the request information to assign an altitude for ROOOMTECH AI Guard file system minifilter.
+
+Company name: ROOOMTECH株式会社
+Contact e-mail: <LONG-TERM COMPANY EMAIL ALIAS>
+Product name: ROOOMTECH AI Guard
+Product URL: https://github.com/softrenzu/ROOOMTECH-AI_Guard
+Product/Filter description: ROOOMTECH AI Guard is a Windows file access protection product designed to prevent unauthorized user-mode applications, including generative AI clients, browsers, scripting runtimes, and other unapproved processes, from reading files located in administrator-configured protected folders. The minifilter enforces read-access decisions in the Windows file I/O path using an administrator-managed application allow list.
+Filter filename: AIGuardFilter.sys
+Filter type: FileSystem
+Filter start-type: Demand
+Requested filter load order group: FSFilter Security Enhancer
+Requested altitude: 88888
+Additional information: The product applies file read-access restrictions and enhanced access control to administrator-selected protected folders. If the requested altitude is unavailable, please assign an appropriate available altitude in the FSFilter Security Enhancer range.
+
+Thanks,
+ROOOMTECH株式会社
