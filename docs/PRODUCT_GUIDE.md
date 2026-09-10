@@ -60,7 +60,7 @@ ROOOMTECH AI Guardは、Windows 11上の指定フォルダを保護し、許可�
 
 Windowsの「設定 > アプリ > インストールされているアプリ」から `ROOOMTECH AI Guard` を選んでアンインストールできます。
 
-スタートメニューの `ROOOMTECH AI Guard > アンインストール` も利用できます。
+スタートメニューの `ROOOMTECH AI Guard > Uninstall` も利用できます。
 
 管理者向けには配布ZIPの `scripts\uninstall.ps1` から削除することもできます。
 
