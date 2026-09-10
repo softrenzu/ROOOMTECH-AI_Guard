@@ -1,0 +1,33 @@
+name: dotnet
+
+on:
+  push:
+    branches: [ main, feature/mvp-foundation ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore src/AI.Guard.Agent/AI.Guard.Agent.csproj
+
+      - name: Build
+        run: dotnet build src/AI.Guard.Agent/AI.Guard.Agent.csproj --configuration Release --no-restore
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $env:AIGUARD_POLICY = Join-Path $PWD "config\policy.sample.json"
+          dotnet run --project src/AI.Guard.Agent/AI.Guard.Agent.csproj -- check "C:\AI_Guard_Protected\secret.pdf" "C:\Windows\System32\notepad.exe"
+          if ($LASTEXITCODE -ne 10) {
+            throw "Expected protected file access to be denied."
+          }

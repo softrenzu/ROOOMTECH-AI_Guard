@@ -1,0 +1,14 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.pdb
+*.sys
+*.cat
+*.cer
+*.pfx
+*.log
+artifacts/
+TestResults/
+policy.local.json

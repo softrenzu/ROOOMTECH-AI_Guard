@@ -1,0 +1,23 @@
+{
+  "protectedPaths": [
+    "C:\\AI_Guard_Protected"
+  ],
+  "allowedApplications": [
+    {
+      "executablePath": "C:\\Program Files\\Microsoft Office\\root\\Office16\\WINWORD.EXE",
+      "sha256": null,
+      "publisherThumbprint": null
+    },
+    {
+      "executablePath": "C:\\Program Files\\Microsoft Office\\root\\Office16\\EXCEL.EXE",
+      "sha256": null,
+      "publisherThumbprint": null
+    },
+    {
+      "executablePath": "C:\\Program Files\\Microsoft Office\\root\\Office16\\POWERPNT.EXE",
+      "sha256": null,
+      "publisherThumbprint": null
+    }
+  ],
+  "denyByDefault": true
+}
