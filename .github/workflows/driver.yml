@@ -73,9 +73,48 @@ jobs:
       - name: Verify driver output
         shell: pwsh
         run: |
-          $sys = Get-ChildItem -Path driver -Filter AIGuardFilter.sys -Recurse | Select-Object -First 1
-          if (-not $sys) {
-            throw "AIGuardFilter.sys was not produced."
+          $package = 'driver/bin/Release/AIGuardFilter'
+          $sys = Join-Path $package 'AIGuardFilter.sys'
+          $inf = Join-Path $package 'AIGuardFilter.inf'
+          $cat = Join-Path $package 'aiguardfilter.cat'
+
+          foreach ($required in @($sys, $inf, $cat)) {
+            if (-not (Test-Path $required -PathType Leaf)) {
+              throw "Required driver package file was not produced: $required"
+            }
           }
-          Write-Host "Driver: $($sys.FullName)"
-          Get-FileHash $sys.FullName -Algorithm SHA256 | Format-List
+
+          Write-Host 'Development driver package generated.'
+          Get-FileHash $sys -Algorithm SHA256 | Format-List
+          Get-FileHash $cat -Algorithm SHA256 | Format-List
+
+      - name: Stage development-only driver artifact
+        shell: pwsh
+        run: |
+          $source = 'driver/bin/Release/AIGuardFilter'
+          $stage = 'out/driver-dev-only'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "$source/AIGuardFilter.sys" "$stage/AIGuardFilter.sys"
+          Copy-Item "$source/AIGuardFilter.inf" "$stage/AIGuardFilter.inf"
+          Copy-Item "$source/aiguardfilter.cat" "$stage/AIGuardFilter.cat"
+          if (Test-Path 'driver/bin/Release/AIGuardFilter.cer') {
+            Copy-Item 'driver/bin/Release/AIGuardFilter.cer' "$stage/AIGuardFilter-TEST.cer"
+          }
+
+          @"
+          ROOOMTECH AI Guard - DEVELOPMENT / TEST ONLY
+
+          This driver package is test-signed by the ephemeral WDK test certificate generated on the GitHub Actions runner.
+          It is NOT Microsoft production-signed and MUST NOT be distributed to end users or installed on production systems.
+          The altitude in this package is a development placeholder and is NOT an officially assigned Microsoft altitude.
+
+          Commit: $env:GITHUB_SHA
+          "@ | Set-Content "$stage/README_DEV_ONLY.txt" -Encoding UTF8
+
+      - name: Upload development-only driver artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIGuardFilter-DEV-TEST-ONLY
+          path: out/driver-dev-only
+          if-no-files-found: error
+          retention-days: 14
