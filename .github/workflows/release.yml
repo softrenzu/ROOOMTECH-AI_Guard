@@ -1,0 +1,59 @@
+name: windows-package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  package:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish Agent
+        shell: pwsh
+        run: |
+          dotnet publish src/AI.Guard.Agent/AI.Guard.Agent.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:PublishTrimmed=false `
+            -o out/Agent
+
+      - name: Publish Desktop
+        shell: pwsh
+        run: |
+          dotnet publish src/AI.Guard.Desktop/AI.Guard.Desktop.csproj `
+            -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:PublishTrimmed=false `
+            -o out/Desktop
+
+      - name: Stage product package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path package/config, package/scripts, package/Driver | Out-Null
+          Copy-Item -Recurse out/Agent package/Agent
+          Copy-Item -Recurse out/Desktop package/Desktop
+          Copy-Item config/policy.sample.json package/config/policy.sample.json
+          Copy-Item scripts/install.ps1 package/scripts/install.ps1
+          Copy-Item scripts/uninstall.ps1 package/scripts/uninstall.ps1
+          Copy-Item LICENSE.md package/LICENSE.md
+          Copy-Item README.md package/README.md
+          Copy-Item driver/AIGuardFilter.inf package/Driver/AIGuardFilter.inf
+          Copy-Item driver/README.md package/Driver/README.md
+          if (Test-Path driver/bin/AIGuardFilter.sys) {
+            Copy-Item driver/bin/AIGuardFilter.sys package/Driver/AIGuardFilter.sys
+          }
+          Compress-Archive -Path package/* -DestinationPath ROOOMTECH-AI-Guard-Windows-x64.zip -Force
+
+      - name: Upload Windows package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ROOOMTECH-AI-Guard-Windows-x64
+          path: ROOOMTECH-AI-Guard-Windows-x64.zip
+          if-no-files-found: error
