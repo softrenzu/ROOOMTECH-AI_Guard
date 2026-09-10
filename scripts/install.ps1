@@ -74,8 +74,6 @@ if (-not (Test-Path (Join-Path $desktopSource 'AIGuard.Desktop.exe'))) {
 
 Write-Host 'ROOOMTECH AI Guard をインストールしています...'
 
-# Stop an existing installation before replacing binaries. Also remove the old
-# Scheduled Task used by early RC builds.
 try { Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue } catch {}
 try { & schtasks.exe /End /TN $legacyTaskName 2>$null | Out-Null } catch {}
 try { & schtasks.exe /Delete /TN $legacyTaskName /F 2>$null | Out-Null } catch {}
@@ -111,13 +109,13 @@ $serviceBinPath = '"' + $agentExe + '" service'
 $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
 
 if ($null -eq $existingService) {
-    Invoke-Sc create $serviceName "binPath= $serviceBinPath" 'start= auto' 'DisplayName= ROOOMTECH AI Guard Agent' 'depend= FltMgr'
+    Invoke-Sc create $serviceName 'binPath=' $serviceBinPath 'start=' 'auto' 'DisplayName=' 'ROOOMTECH AI Guard Agent' 'depend=' 'FltMgr'
 } else {
-    Invoke-Sc config $serviceName "binPath= $serviceBinPath" 'start= auto' 'DisplayName= ROOOMTECH AI Guard Agent' 'depend= FltMgr'
+    Invoke-Sc config $serviceName 'binPath=' $serviceBinPath 'start=' 'auto' 'DisplayName=' 'ROOOMTECH AI Guard Agent' 'depend=' 'FltMgr'
 }
 
 Invoke-Sc description $serviceName 'ROOOMTECH AI Guard policy agent and kernel protection coordinator'
-Invoke-Sc failure $serviceName 'reset= 86400' 'actions= restart/5000/restart/15000/restart/60000'
+Invoke-Sc failure $serviceName 'reset=' '86400' 'actions=' 'restart/5000/restart/15000/restart/60000'
 Invoke-Sc failureflag $serviceName '1'
 Start-Service -Name $serviceName
 
