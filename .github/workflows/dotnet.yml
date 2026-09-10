@@ -27,7 +27,10 @@ jobs:
         shell: pwsh
         run: |
           $env:AIGUARD_POLICY = Join-Path $PWD "config\policy.sample.json"
-          dotnet run --project src/AI.Guard.Agent/AI.Guard.Agent.csproj -- check "C:\AI_Guard_Protected\secret.pdf" "C:\Windows\System32\notepad.exe"
-          if ($LASTEXITCODE -ne 10) {
-            throw "Expected protected file access to be denied."
+          $output = & dotnet run --project src/AI.Guard.Agent/AI.Guard.Agent.csproj -- check "C:\AI_Guard_Protected\secret.pdf" "C:\Windows\System32\notepad.exe" 2>&1
+          $exitCode = $LASTEXITCODE
+          $output | Write-Host
+          if ($exitCode -ne 10) {
+            throw "Expected protected file access to be denied with exit code 10, got $exitCode."
           }
+          exit 0
