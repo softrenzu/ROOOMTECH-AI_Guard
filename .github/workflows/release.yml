@@ -104,6 +104,7 @@ jobs:
         shell: pwsh
         run: |
           $root = (Resolve-Path package).Path
+          $uninstallKey = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ROOOMTECHAIGuard'
           try {
             & "$root/scripts/install.ps1" -PackageRoot $root -Usage Personal -AcceptLicense
             $service = Get-Service -Name AIGuardAgent -ErrorAction Stop
@@ -113,10 +114,20 @@ jobs:
             if (-not (Test-Path "$root/Setup/AIGuard.Setup.exe")) {
               throw 'Graphical Setup executable was not included in the package.'
             }
-            Write-Host 'AIGuardAgent Windows Service reached Running state and Setup executable is present.'
+            if (-not (Test-Path $uninstallKey)) {
+              throw 'Windows uninstall registration was not created.'
+            }
+            $installedRoot = Join-Path $env:ProgramFiles 'ROOOMTECH\AI Guard'
+            if (-not (Test-Path (Join-Path $installedRoot 'Uninstall-AIGuard.cmd'))) {
+              throw 'Installed uninstaller launcher was not created.'
+            }
+            Write-Host 'Service, graphical Setup, Start Menu/Apps registration and installed uninstaller are present.'
           }
           finally {
             & "$root/scripts/uninstall.ps1"
+          }
+          if (Test-Path $uninstallKey) {
+            throw 'Windows uninstall registration remained after uninstall.'
           }
 
       - name: Upload Windows package
