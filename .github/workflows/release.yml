@@ -3,7 +3,7 @@ name: windows-package
 on:
   workflow_dispatch:
   push:
-    branches: [ main, feature/mvp-foundation ]
+    branches: [ main, feature/mvp-foundation, feature/driver-ci ]
     tags:
       - "v*"
 
@@ -37,7 +37,7 @@ jobs:
       - name: Stage product package
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path package/config, package/scripts, package/Driver | Out-Null
+          New-Item -ItemType Directory -Force -Path package/config, package/scripts | Out-Null
           Copy-Item -Recurse out/Agent package/Agent
           Copy-Item -Recurse out/Desktop package/Desktop
           Copy-Item config/policy.sample.json package/config/policy.sample.json
@@ -45,11 +45,42 @@ jobs:
           Copy-Item scripts/uninstall.ps1 package/scripts/uninstall.ps1
           Copy-Item LICENSE.md package/LICENSE.md
           Copy-Item README.md package/README.md
-          Copy-Item driver/AIGuardFilter.inf package/Driver/AIGuardFilter.inf
-          Copy-Item driver/README.md package/Driver/README.md
-          if (Test-Path driver/bin/AIGuardFilter.sys) {
-            Copy-Item driver/bin/AIGuardFilter.sys package/Driver/AIGuardFilter.sys
+
+          $signedDriverRoot = 'driver/signed'
+          $inf = Join-Path $signedDriverRoot 'AIGuardFilter.inf'
+          $sys = Join-Path $signedDriverRoot 'AIGuardFilter.sys'
+          $cat = Join-Path $signedDriverRoot 'AIGuardFilter.cat'
+          $driverReady = (Test-Path $inf) -and (Test-Path $sys) -and (Test-Path $cat)
+
+          if ($driverReady) {
+            $signature = Get-AuthenticodeSignature -FilePath $cat
+            $driverReady = $signature.Status -eq [System.Management.Automation.SignatureStatus]::Valid `
+              -and $null -ne $signature.SignerCertificate `
+              -and $signature.SignerCertificate.Subject -match 'Microsoft'
           }
+
+          $isFinalTag = $env:GITHUB_REF -match '^refs/tags/v\d+\.\d+\.\d+$'
+          if ($isFinalTag -and -not $driverReady) {
+            throw 'Final release tags require a valid Microsoft-signed AIGuardFilter driver package.'
+          }
+
+          if ($driverReady) {
+            New-Item -ItemType Directory -Force -Path package/Driver | Out-Null
+            Copy-Item $inf package/Driver/AIGuardFilter.inf
+            Copy-Item $sys package/Driver/AIGuardFilter.sys
+            Copy-Item $cat package/Driver/AIGuardFilter.cat
+            Write-Host "Microsoft-signed Kernel Driver included: $($signature.SignerCertificate.Subject)"
+          } else {
+            Write-Host 'RC/development package: Kernel Driver not included.'
+          }
+
+          @"
+          ROOOMTECH AI Guard
+          Commit: $env:GITHUB_SHA
+          Ref: $env:GITHUB_REF
+          KernelDriverIncluded: $driverReady
+          "@ | Set-Content -Path package/BUILD_INFO.txt -Encoding UTF8
+
           Compress-Archive -Path package/* -DestinationPath ROOOMTECH-AI-Guard-Windows-x64.zip -Force
 
       - name: Upload Windows package

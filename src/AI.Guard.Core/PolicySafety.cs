@@ -33,10 +33,17 @@ public static class PolicySafety
             return false;
         }
 
+        var expanded = Environment.ExpandEnvironmentVariables(path.Trim().Trim('"'));
+        if (!Path.IsPathFullyQualified(expanded))
+        {
+            reason = $"絶対パスを指定してください: {path}";
+            return false;
+        }
+
         string fullPath;
         try
         {
-            fullPath = Path.GetFullPath(Environment.ExpandEnvironmentVariables(path.Trim().Trim('"')))
+            fullPath = Path.GetFullPath(expanded)
                 .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
         }
         catch
@@ -56,7 +63,7 @@ public static class PolicySafety
         {
             if (IsSameOrInside(fullPath, unsafeRoot))
             {
-                reason = $"Windowsの動作に影響するため、このシステム領域は保護対象にできません: {fullPath}";
+                reason = $"Windowsやアプリの動作に影響するため、このシステム領域は保護対象にできません: {fullPath}";
                 return false;
             }
         }
@@ -73,12 +80,10 @@ public static class PolicySafety
             Environment.GetFolderPath(Environment.SpecialFolder.System),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
             Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86),
-            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData)
+            Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
         };
-
-        var userProfile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        if (!string.IsNullOrWhiteSpace(userProfile))
-            candidates.Add(Directory.GetParent(userProfile)?.FullName);
 
         return candidates
             .Where(path => !string.IsNullOrWhiteSpace(path))

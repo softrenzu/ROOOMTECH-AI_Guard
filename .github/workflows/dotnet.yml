@@ -2,7 +2,7 @@ name: dotnet
 
 on:
   push:
-    branches: [ main, feature/mvp-foundation ]
+    branches: [ main, feature/mvp-foundation, feature/driver-ci ]
   pull_request:
     branches: [ main ]
 
@@ -23,11 +23,17 @@ jobs:
       - name: Restore Desktop
         run: dotnet restore src/AI.Guard.Desktop/AI.Guard.Desktop.csproj
 
+      - name: Restore Tests
+        run: dotnet restore tests/AI.Guard.Core.Tests/AI.Guard.Core.Tests.csproj
+
       - name: Build Agent
         run: dotnet build src/AI.Guard.Agent/AI.Guard.Agent.csproj --configuration Release --no-restore
 
       - name: Build Desktop
         run: dotnet build src/AI.Guard.Desktop/AI.Guard.Desktop.csproj --configuration Release --no-restore
+
+      - name: Run Core Tests
+        run: dotnet test tests/AI.Guard.Core.Tests/AI.Guard.Core.Tests.csproj --configuration Release --no-restore --verbosity normal
 
       - name: Smoke test
         shell: pwsh

@@ -1,0 +1,120 @@
+name: driver
+
+on:
+  push:
+    branches: [ main, feature/driver-ci ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-driver:
+    runs-on: windows-2025-vs2026
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+
+      - name: Restore WDK and SDK NuGet packages
+        shell: pwsh
+        run: nuget restore .\packages.config -PackagesDirectory .\packages\
+
+      - name: Add WDK tools to PATH
+        shell: pwsh
+        run: |
+          function Find-HostTool([string]$tool) {
+            $candidates = @(Get-ChildItem -Path .\packages -Filter $tool -Recurse -File -ErrorAction SilentlyContinue)
+            if ($candidates.Count -eq 0) {
+              return $null
+            }
+
+            $preferred = $candidates | Where-Object { $_.FullName -match '\\x64\\' } | Select-Object -First 1
+            if (-not $preferred) {
+              $preferred = $candidates | Where-Object { $_.FullName -match '\\x86\\' } | Select-Object -First 1
+            }
+            if (-not $preferred) {
+              $preferred = $candidates | Where-Object { $_.FullName -notmatch '\\ARM64\\|\\arm64\\' } | Select-Object -First 1
+            }
+            return $preferred
+          }
+
+          $required = @('stampinf.exe')
+          $optional = @('Inf2Cat.exe', 'signtool.exe')
+
+          foreach ($tool in $required) {
+            $match = Find-HostTool $tool
+            if (-not $match) {
+              throw "$tool was not found for an x64/x86 host in restored WDK packages."
+            }
+            Write-Host "$tool => $($match.FullName)"
+            Add-Content -Path $env:GITHUB_PATH -Value $match.DirectoryName
+          }
+
+          foreach ($tool in $optional) {
+            $match = Find-HostTool $tool
+            if ($match) {
+              Write-Host "$tool => $($match.FullName)"
+              Add-Content -Path $env:GITHUB_PATH -Value $match.DirectoryName
+            }
+          }
+
+      - name: Build x64 Release minifilter
+        shell: pwsh
+        run: |
+          msbuild driver/AIGuardFilter.vcxproj `
+            /m `
+            /t:Build `
+            /p:Configuration=Release `
+            /p:Platform=x64
+
+      - name: Verify driver output
+        shell: pwsh
+        run: |
+          $package = 'driver/bin/Release/AIGuardFilter'
+          $sys = Join-Path $package 'AIGuardFilter.sys'
+          $inf = Join-Path $package 'AIGuardFilter.inf'
+          $cat = Join-Path $package 'aiguardfilter.cat'
+
+          foreach ($required in @($sys, $inf, $cat)) {
+            if (-not (Test-Path $required -PathType Leaf)) {
+              throw "Required driver package file was not produced: $required"
+            }
+          }
+
+          Write-Host 'Development driver package generated.'
+          Get-FileHash $sys -Algorithm SHA256 | Format-List
+          Get-FileHash $cat -Algorithm SHA256 | Format-List
+
+      - name: Stage development-only driver artifact
+        shell: pwsh
+        run: |
+          $source = 'driver/bin/Release/AIGuardFilter'
+          $stage = 'out/driver-dev-only'
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          Copy-Item "$source/AIGuardFilter.sys" "$stage/AIGuardFilter.sys"
+          Copy-Item "$source/AIGuardFilter.inf" "$stage/AIGuardFilter.inf"
+          Copy-Item "$source/aiguardfilter.cat" "$stage/AIGuardFilter.cat"
+          if (Test-Path 'driver/bin/Release/AIGuardFilter.cer') {
+            Copy-Item 'driver/bin/Release/AIGuardFilter.cer' "$stage/AIGuardFilter-TEST.cer"
+          }
+
+          @"
+          ROOOMTECH AI Guard - DEVELOPMENT / TEST ONLY
+
+          This driver package is test-signed by the ephemeral WDK test certificate generated on the GitHub Actions runner.
+          It is NOT Microsoft production-signed and MUST NOT be distributed to end users or installed on production systems.
+          The altitude in this package is a development placeholder and is NOT an officially assigned Microsoft altitude.
+
+          Commit: $env:GITHUB_SHA
+          "@ | Set-Content "$stage/README_DEV_ONLY.txt" -Encoding UTF8
+
+      - name: Upload development-only driver artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AIGuardFilter-DEV-TEST-ONLY
+          path: out/driver-dev-only
+          if-no-files-found: error
+          retention-days: 14

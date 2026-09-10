@@ -4,7 +4,7 @@ Class       = "SecurityEnhancer"
 ClassGuid   = {d02bc3da-0c8e-4945-9bd5-f1883c226c8c}
 Provider    = %ManufacturerName%
 DriverVer   = 09/10/2026,1.0.0.0
-CatalogFile =
+CatalogFile = AIGuardFilter.cat
 PnpLockdown = 1
 
 [DestinationDirs]
