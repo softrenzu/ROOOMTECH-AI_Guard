@@ -201,8 +201,8 @@ $launcherContent = @"
 powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ""$installedUninstallScript""'"
 "@
 Set-Content -Path $uninstallLauncher -Value $launcherContent -Encoding ASCII
-$uninstallStartShortcut = Join-Path $startMenuDir 'アンインストール.lnk'
-New-Shortcut -Path $uninstallStartShortcut -TargetPath $uninstallLauncher -WorkingDirectory $installRoot -Description 'ROOOMTECH AI Guardをアンインストール'
+$uninstallStartShortcut = Join-Path $startMenuDir 'Uninstall.lnk'
+New-Shortcut -Path $uninstallStartShortcut -TargetPath $uninstallLauncher -WorkingDirectory $installRoot -Description 'Uninstall ROOOMTECH AI Guard'
 
 New-Item -Path $uninstallKey -Force | Out-Null
 Set-ItemProperty -Path $uninstallKey -Name DisplayName -Value 'ROOOMTECH AI Guard'
