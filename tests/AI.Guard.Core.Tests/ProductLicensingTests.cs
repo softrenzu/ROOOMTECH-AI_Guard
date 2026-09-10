@@ -1,7 +1,8 @@
 using System.Security.Cryptography;
 using Rooomtech.AIGuard.Core;
+using Xunit;
 
-namespace AI.Guard.Core.Tests;
+namespace Rooomtech.AIGuard.Core.Tests;
 
 public sealed class ProductLicensingTests
 {
