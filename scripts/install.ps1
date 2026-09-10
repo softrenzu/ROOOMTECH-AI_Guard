@@ -153,3 +153,7 @@ if ($filterRunning) {
 } else {
     Write-Warning 'Microsoft署名済みKernel Driverが含まれていないため、Kernelレベルの強制保護はまだ有効ではありません。'
 }
+
+# Optional legacy-task and filter probes must not leak a stale native exit code
+# after a successful installation.
+$global:LASTEXITCODE = 0
