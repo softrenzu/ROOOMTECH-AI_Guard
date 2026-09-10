@@ -1,32 +1,84 @@
 # ROOOMTECH AI Guard
 
-Windows 11向けの機密ファイル保護プロジェクトです。
+**生成AI時代の機密ファイル保護ソフト。**  
+Windows 11上で、管理者が指定したフォルダのファイルを、許可されていないアプリから読めないように制御します。
 
-目標は「AIに読めない形式へ変換する」ことではなく、保護対象ファイルへのアクセスをOS側で制御し、許可されていないプロセスからの読み取りを拒否することです。
+ChatGPT、Claude、Gemini等のサービスそのものを判定するのではなく、ファイルを読み取ろうとするWindowsプロセスをOSのファイルI/O層で制御する設計です。ブラウザ、Python、AIクライアント等を許可リストに入れなければ、保護対象ファイルの読み取りを拒否できます。
 
-## 料金・ライセンス
+## 料金
 
-- 個人による私的利用: 無償
-- 法人・団体・業務目的での利用: 有償・個別見積
-- 法人向けの価格、導入条件、サポート内容は利用規模・環境に応じて個別に設定します。
+- **個人による私的利用: 無償**
+- **法人・団体・業務目的での利用: 有償・個別見積**
 
-詳細は [LICENSE.md](LICENSE.md) を参照してください。
+法人向けの価格、導入条件、サポート内容は利用規模・環境に応じて個別に設定します。詳細は [LICENSE.md](LICENSE.md) を参照してください。
 
-## MVP構成
+## 対応環境
 
-- `AI.Guard.Core`: 保護フォルダ判定、許可アプリ判定、SHA-256照合の土台、JSONポリシー
-- `AI.Guard.Agent`: コマンドライン判定、Named Pipeによるローカル判定API、JSON Lines監査ログ
-- `driver`: Windows File System Minifilter DriverのPoC
-- GitHub Actions: Windows上で.NET 8ビルドと拒否判定スモークテスト
+- Windows 11 x64
+- 管理者権限
+- 製品版Kernel保護にはMicrosoft要件を満たした署名済みMinifilter Driverが必要
 
-## 動作確認
+## 現在のバージョン
 
-Windows 11で.NET 8 SDKをインストール後、PowerShellから実行します。
+**1.0.0 Release Candidate**
+
+管理GUI、Policy Agent、動的Driverポリシー同期、配布パッケージ生成まで実装済みです。一般のWindows 11へKernel Driverを配布するために必要なMicrosoft正式AltitudeおよびDriver署名は外部リリースゲートです。詳細は [docs/PRODUCTION_RELEASE.md](docs/PRODUCTION_RELEASE.md) を参照してください。
+
+## 主な機能
+
+- 保護フォルダをGUIで追加・削除
+- 保護対象ファイルへの未許可アプリの読み取りをKernel側で拒否
+- Word / Excel / PowerPoint等、許可するアプリを管理者が指定
+- 許可アプリ登録時にSHA-256を記録
+- Agent同期時に許可アプリのSHA-256を再検証
+- AgentからMinifilter Driverへポリシーを動的同期
+- AgentのWindows起動時自動実行
+- Driver / Agent稼働状態表示
+- 監査ログ表示
+- Windows x64自己完結型配布ZIP生成
+
+## 仕組み
+
+~~~text
+管理GUI
+   |
+   v
+policy.json
+   |
+   v
+AI Guard Agent
+   |
+   | Filter Manager Communication Port
+   v
+AI Guard Minifilter Driver
+   |
+   +-- 許可アプリ    -> 読み取り許可
+   |
+   +-- 未許可アプリ  -> STATUS_ACCESS_DENIED
+~~~
+
+保護フォルダの閲覧自体は可能にしつつ、ファイル内容を読み取る要求を制御します。
+
+## Windows配布パッケージ
+
+GitHub Actionsの `windows-package` ワークフローが以下を含む `ROOOMTECH-AI-Guard-Windows-x64.zip` を生成します。
+
+- `Agent/` Policy Agent
+- `Desktop/` 管理GUI
+- `scripts/install.ps1`
+- `scripts/uninstall.ps1`
+- `Driver/` Driverパッケージ領域
+- `config/` 初期ポリシー
+
+署名済みDriverがまだ含まれないRCパッケージでは、GUIとAgentは利用できますがKernelレベルの強制保護は有効になりません。正式版では署名済みDriverを含めます。
+
+## 開発環境での確認
+
+Windows 11 + .NET 8 SDK:
 
 ~~~powershell
 git clone https://github.com/softrenzu/ROOOMTECH-AI_Guard.git
 cd ROOOMTECH-AI_Guard
-git switch feature/mvp-foundation
 
 $env:AIGUARD_POLICY = "$PWD\config\policy.sample.json"
 
@@ -37,24 +89,28 @@ dotnet run --project .\src\AI.Guard.Agent\AI.Guard.Agent.csproj -- check `
 
 未許可アプリの場合は `Allowed = false`、終了コード `10` になります。
 
-常駐判定エージェント:
+Agent:
 
 ~~~powershell
 dotnet run --project .\src\AI.Guard.Agent\AI.Guard.Agent.csproj -- serve
 ~~~
 
-Named Pipe名は `ROOOMTECH_AIGuard` です。
+Driver同期:
 
-## 初期ポリシー
+~~~powershell
+dotnet run --project .\src\AI.Guard.Agent\AI.Guard.Agent.csproj -- sync-driver
+~~~
 
-既定の保護フォルダは `C:\AI_Guard_Protected` です。初期許可アプリはMicrosoft Word、Excel、PowerPointです。Driver PoCではAdobe Acrobat Readerも許可しています。
+## セキュリティ境界
 
-## セキュリティ上の位置付け
+本製品は通常ユーザーモードの未許可アプリによる保護ファイル読み取りを制御します。ローカル管理者／Kernel権限を取得した攻撃者、許可アプリ自身による外部転送、外部カメラによる撮影まで完全に防止するものではありません。
 
-現在はMVP / PoCです。Minifilter Driverはテスト環境専用です。本番製品にする前に、AgentとDriverの動的ポリシー同期、Authenticode発行者検証、SHA-256検証、ブラウザ子プロセス対策、コピー・印刷・スクリーンショット対策、耐タンパー、正式なドライバー署名、正式Altitude、インストーラー、管理GUIが必要です。
+詳細は [SECURITY.md](SECURITY.md) を参照してください。
 
-単にプロセス名だけで許可する方式は本番用途では十分ではありません。現在のDriver PoCは、カーネル側でファイルアクセスを拒否できることを検証するための初期実装です。
+## Microsoft Driverリリース工程
 
-## 次の実装
+Minifilter Driverの正式配布前に、Microsoftから正式Altitudeを取得し、Microsoftの要件を満たした署名済みDriverを作成します。申請用文面は [docs/ALTITUDE_REQUEST.txt](docs/ALTITUDE_REQUEST.txt) に用意しています。
 
-管理GUIから「保護フォルダ」と「許可アプリ」を登録し、そのポリシーをAgentからDriverへ安全に同期する構成へ進めます。
+---
+
+Copyright © 2026 ROOOMTECH株式会社. All rights reserved.
