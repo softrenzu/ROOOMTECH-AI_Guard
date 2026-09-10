@@ -20,6 +20,29 @@ jobs:
         shell: pwsh
         run: nuget restore .\packages.config -PackagesDirectory .\packages\
 
+      - name: Add WDK tools to PATH
+        shell: pwsh
+        run: |
+          $required = @('stampinf.exe')
+          $optional = @('Inf2Cat.exe', 'signtool.exe')
+
+          foreach ($tool in $required) {
+            $match = Get-ChildItem -Path .\packages -Filter $tool -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if (-not $match) {
+              throw "$tool was not found in restored WDK packages."
+            }
+            Write-Host "$tool => $($match.FullName)"
+            Add-Content -Path $env:GITHUB_PATH -Value $match.DirectoryName
+          }
+
+          foreach ($tool in $optional) {
+            $match = Get-ChildItem -Path .\packages -Filter $tool -Recurse -File -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($match) {
+              Write-Host "$tool => $($match.FullName)"
+              Add-Content -Path $env:GITHUB_PATH -Value $match.DirectoryName
+            }
+          }
+
       - name: Build x64 Release minifilter
         shell: pwsh
         run: |
