@@ -9,6 +9,7 @@ namespace Rooomtech.AIGuard.Agent;
 internal static class DriverPolicyBridge
 {
     private const string PortName = @"\ROOOMTECHAIGuardPort";
+    private const string FilterName = "AIGuardFilter";
     private const int MaxProtectedPaths = PolicySafety.MaxProtectedPaths;
     private const int MaxAllowedApps = PolicySafety.MaxAllowedApplications;
     private const int PathChars = 520;
@@ -25,6 +26,15 @@ internal static class DriverPolicyBridge
             var payload = BuildPayload(protectedPaths, allowedApps);
 
             var hr = FilterConnectCommunicationPort(PortName, 0, IntPtr.Zero, 0, IntPtr.Zero, out var port);
+            if (hr != 0)
+            {
+                // The minifilter is demand-start. On boot the Windows service may run before
+                // the filter has been loaded, so ask Filter Manager to load it and retry.
+                _ = FilterLoad(FilterName);
+                Thread.Sleep(250);
+                hr = FilterConnectCommunicationPort(PortName, 0, IntPtr.Zero, 0, IntPtr.Zero, out port);
+            }
+
             if (hr != 0)
             {
                 message = $"Kernel Driverに接続できません (HRESULT 0x{hr:X8})";
@@ -132,6 +142,9 @@ internal static class DriverPolicyBridge
         ushort wSizeOfContext,
         IntPtr lpSecurityAttributes,
         out IntPtr hPort);
+
+    [DllImport("fltlib.dll", CharSet = CharSet.Unicode)]
+    private static extern int FilterLoad(string lpFilterName);
 
     [DllImport("fltlib.dll")]
     private static extern int FilterSendMessage(
