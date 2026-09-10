@@ -79,8 +79,13 @@ try { & schtasks.exe /End /TN $legacyTaskName 2>$null | Out-Null } catch {}
 try { & schtasks.exe /Delete /TN $legacyTaskName /F 2>$null | Out-Null } catch {}
 
 New-Item -ItemType Directory -Force -Path $installRoot, $dataRoot | Out-Null
-Copy-Item -Recurse -Force $agentSource (Join-Path $installRoot 'Agent')
-Copy-Item -Recurse -Force $desktopSource (Join-Path $installRoot 'Desktop')
+$agentDest = Join-Path $installRoot 'Agent'
+$desktopDest = Join-Path $installRoot 'Desktop'
+if (Test-Path $agentDest) { Remove-Item -Recurse -Force $agentDest }
+if (Test-Path $desktopDest) { Remove-Item -Recurse -Force $desktopDest }
+New-Item -ItemType Directory -Force -Path $agentDest, $desktopDest | Out-Null
+Copy-Item -Recurse -Force (Join-Path $agentSource '*') $agentDest
+Copy-Item -Recurse -Force (Join-Path $desktopSource '*') $desktopDest
 
 $policyPath = Join-Path $dataRoot 'policy.json'
 if (-not (Test-Path $policyPath) -and (Test-Path $configSource)) {
