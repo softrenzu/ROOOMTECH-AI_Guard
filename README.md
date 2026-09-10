@@ -19,7 +19,7 @@ ChatGPT、Claude、Gemini等のサービス名を直接判定するのではな�
 
 **1.0.0-rc.2 Commercial Release Candidate**
 
-管理GUI、Policy Agent、Windows Service常駐、動的Driverポリシー同期、法人ライセンス検証、Installer/Uninstaller、配布パッケージ生成まで実装済みです。
+管理GUI、Policy Agent、Windows Service常駐、動的Driverポリシー同期、法人ライセンス検証、グラフィカルSetup、Windowsアプリ登録、アンインストール、配布パッケージ生成まで実装済みです。
 
 一般のWindows 11へKernel Driverを正式配布するために必要なMicrosoft正式Minifilter AltitudeおよびMicrosoft Driver署名は外部リリースゲートです。これらが完了するまで、Kernel Driverを含まないRCパッケージではKernelレベルの強制保護は有効になりません。
 
@@ -39,6 +39,9 @@ ChatGPT、Claude、Gemini等のサービス名を直接判定するのではな�
 - 個人無償 / 法人有償の利用区分
 - ECDSA P-256署名付きBusinessライセンス検証
 - 改変・期限切れ法人ライセンスの拒否
+- UAC昇格対応の `AIGuard.Setup.exe`
+- Windows「インストールされているアプリ」への登録
+- デスクトップ / スタートメニューショートカット
 - Windows x64自己完結型配布ZIP生成
 
 ## 法人ライセンス方式
@@ -85,25 +88,20 @@ Windows再起動後は `AIGuardAgent` Serviceが自動起動し、Minifilterを�
 
 ## インストール
 
-### 個人私的利用
+配布ZIPを展開し、`Setup\AIGuard.Setup.exe` をダブルクリックします。
 
-管理者PowerShellで:
+セットアップ画面で次を選択できます。
 
-```powershell
-.\scripts\install.ps1 -Usage Personal
-```
+- 個人による私的利用（無償）
+- 法人・団体・業務利用（有償・個別見積）
 
-### 法人・団体・業務利用
+法人利用ではROOOMTECH株式会社発行のBusinessライセンスJSONを選択します。セットアップが署名・製品名・有効期間を検証し、無効なライセンスでは法人利用としてインストールできません。
 
-ROOOMTECH株式会社が発行したBusinessライセンスを指定します。
+管理者向けの自動展開では `scripts\install.ps1` も利用できます。詳しい利用方法は [docs/PRODUCT_GUIDE.md](docs/PRODUCT_GUIDE.md) を参照してください。
 
-```powershell
-.\scripts\install.ps1 -Usage Business -LicensePath "C:\path\company.aiguard-license.json"
-```
+## アンインストール
 
-インストーラーは法人ライセンスの署名・製品名・有効期間を検証します。無効なライセンスでは法人利用としてインストールを完了しません。
-
-詳しい利用方法は [docs/PRODUCT_GUIDE.md](docs/PRODUCT_GUIDE.md) を参照してください。
+インストール後はWindowsの「設定 > アプリ > インストールされているアプリ」に `ROOOMTECH AI Guard` が登録されます。スタートメニューからもアンインストールできます。
 
 ## Windows配布パッケージ
 
@@ -111,6 +109,7 @@ GitHub Actionsの `windows-package` ワークフローが `ROOOMTECH-AI-Guard-Wi
 
 配布物には以下を含みます。
 
+- `Setup/` ダブルクリック用グラフィカルインストーラー
 - `Agent/` Policy Agent / Windows Service
 - `Desktop/` 管理GUI
 - `scripts/install.ps1`
