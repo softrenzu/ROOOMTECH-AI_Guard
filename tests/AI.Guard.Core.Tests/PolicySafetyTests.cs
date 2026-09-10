@@ -1,4 +1,5 @@
 using Rooomtech.AIGuard.Core;
+using Xunit;
 
 namespace Rooomtech.AIGuard.Core.Tests;
 
