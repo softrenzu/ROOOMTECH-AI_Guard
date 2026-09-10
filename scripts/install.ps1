@@ -58,6 +58,22 @@ function Invoke-Sc {
     }
 }
 
+function New-Shortcut {
+    param(
+        [Parameter(Mandatory = $true)][string]$Path,
+        [Parameter(Mandatory = $true)][string]$TargetPath,
+        [string]$WorkingDirectory = '',
+        [string]$Description = ''
+    )
+
+    $shell = New-Object -ComObject WScript.Shell
+    $shortcut = $shell.CreateShortcut($Path)
+    $shortcut.TargetPath = $TargetPath
+    if (-not [string]::IsNullOrWhiteSpace($WorkingDirectory)) { $shortcut.WorkingDirectory = $WorkingDirectory }
+    if (-not [string]::IsNullOrWhiteSpace($Description)) { $shortcut.Description = $Description }
+    $shortcut.Save()
+}
+
 Assert-Administrator
 
 if (-not $AcceptLicense) {
@@ -82,10 +98,13 @@ $installRoot = Join-Path $env:ProgramFiles 'ROOOMTECH\AI Guard'
 $dataRoot = Join-Path $env:ProgramData 'ROOOMTECH\AIGuard'
 $agentSource = Join-Path $PackageRoot 'Agent'
 $desktopSource = Join-Path $PackageRoot 'Desktop'
+$setupSource = Join-Path $PackageRoot 'Setup'
+$scriptsSource = Join-Path $PackageRoot 'scripts'
 $configSource = Join-Path $PackageRoot 'config\policy.sample.json'
 $driverSource = Join-Path $PackageRoot 'Driver'
 $serviceName = 'AIGuardAgent'
 $legacyTaskName = 'ROOOMTECH AI Guard Agent'
+$uninstallKey = 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\ROOOMTECHAIGuard'
 
 if (-not (Test-Path (Join-Path $agentSource 'AIGuard.exe'))) {
     throw "Agentが見つかりません: $agentSource"
@@ -104,13 +123,19 @@ try { & schtasks.exe /Delete /TN $legacyTaskName /F 2>$null | Out-Null } catch {
 New-Item -ItemType Directory -Force -Path $installRoot, $dataRoot | Out-Null
 $agentDest = Join-Path $installRoot 'Agent'
 $desktopDest = Join-Path $installRoot 'Desktop'
-if (Test-Path $agentDest) { Remove-Item -Recurse -Force $agentDest }
-if (Test-Path $desktopDest) { Remove-Item -Recurse -Force $desktopDest }
-New-Item -ItemType Directory -Force -Path $agentDest, $desktopDest | Out-Null
+$setupDest = Join-Path $installRoot 'Setup'
+$scriptsDest = Join-Path $installRoot 'Scripts'
+foreach ($path in @($agentDest, $desktopDest, $setupDest, $scriptsDest)) {
+    if (Test-Path $path) { Remove-Item -Recurse -Force $path }
+    New-Item -ItemType Directory -Force -Path $path | Out-Null
+}
 Copy-Item -Recurse -Force (Join-Path $agentSource '*') $agentDest
 Copy-Item -Recurse -Force (Join-Path $desktopSource '*') $desktopDest
+if (Test-Path $setupSource) { Copy-Item -Recurse -Force (Join-Path $setupSource '*') $setupDest }
+Copy-Item -Force (Join-Path $scriptsSource 'uninstall.ps1') (Join-Path $scriptsDest 'uninstall.ps1')
 
 $agentExe = Join-Path $agentDest 'AIGuard.exe'
+$desktopExe = Join-Path $desktopDest 'AIGuard.Desktop.exe'
 $installedLicensePath = Join-Path $dataRoot 'license.json'
 $usageModePath = Join-Path $dataRoot 'usage-mode.txt'
 
@@ -161,14 +186,33 @@ Invoke-Sc failure $serviceName 'reset=' '86400' 'actions=' 'restart/5000/restart
 Invoke-Sc failureflag $serviceName '1'
 Start-Service -Name $serviceName
 
-$desktopExe = Join-Path $installRoot 'Desktop\AIGuard.Desktop.exe'
 $desktopShortcut = Join-Path ([Environment]::GetFolderPath('CommonDesktopDirectory')) 'ROOOMTECH AI Guard.lnk'
-$shell = New-Object -ComObject WScript.Shell
-$shortcut = $shell.CreateShortcut($desktopShortcut)
-$shortcut.TargetPath = $desktopExe
-$shortcut.WorkingDirectory = Split-Path $desktopExe
-$shortcut.Description = 'ROOOMTECH AI Guard'
-$shortcut.Save()
+New-Shortcut -Path $desktopShortcut -TargetPath $desktopExe -WorkingDirectory (Split-Path $desktopExe) -Description 'ROOOMTECH AI Guard'
+
+$startMenuDir = Join-Path ([Environment]::GetFolderPath('CommonPrograms')) 'ROOOMTECH AI Guard'
+New-Item -ItemType Directory -Force -Path $startMenuDir | Out-Null
+$appStartShortcut = Join-Path $startMenuDir 'ROOOMTECH AI Guard.lnk'
+New-Shortcut -Path $appStartShortcut -TargetPath $desktopExe -WorkingDirectory (Split-Path $desktopExe) -Description 'ROOOMTECH AI Guard'
+
+$installedUninstallScript = Join-Path $scriptsDest 'uninstall.ps1'
+$uninstallLauncher = Join-Path $installRoot 'Uninstall-AIGuard.cmd'
+$launcherContent = @"
+@echo off
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Start-Process powershell.exe -Verb RunAs -Wait -ArgumentList '-NoProfile -ExecutionPolicy Bypass -File ""$installedUninstallScript""'"
+"@
+Set-Content -Path $uninstallLauncher -Value $launcherContent -Encoding ASCII
+$uninstallStartShortcut = Join-Path $startMenuDir 'アンインストール.lnk'
+New-Shortcut -Path $uninstallStartShortcut -TargetPath $uninstallLauncher -WorkingDirectory $installRoot -Description 'ROOOMTECH AI Guardをアンインストール'
+
+New-Item -Path $uninstallKey -Force | Out-Null
+Set-ItemProperty -Path $uninstallKey -Name DisplayName -Value 'ROOOMTECH AI Guard'
+Set-ItemProperty -Path $uninstallKey -Name DisplayVersion -Value '1.0.0-rc.2'
+Set-ItemProperty -Path $uninstallKey -Name Publisher -Value 'ROOOMTECH株式会社'
+Set-ItemProperty -Path $uninstallKey -Name InstallLocation -Value $installRoot
+Set-ItemProperty -Path $uninstallKey -Name DisplayIcon -Value $desktopExe
+Set-ItemProperty -Path $uninstallKey -Name UninstallString -Value ('"' + $uninstallLauncher + '"')
+Set-ItemProperty -Path $uninstallKey -Name NoModify -Type DWord -Value 1
+Set-ItemProperty -Path $uninstallKey -Name NoRepair -Type DWord -Value 1
 
 Start-Sleep -Milliseconds 750
 $service = Get-Service -Name $serviceName -ErrorAction Stop
