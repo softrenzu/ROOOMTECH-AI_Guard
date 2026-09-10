@@ -10,6 +10,9 @@ namespace Rooomtech.AIGuard.Desktop;
 
 public partial class MainWindow : Window
 {
+    private const int MaxProtectedPaths = 8;
+    private const int MaxAllowedApps = 32;
+
     private readonly string _baseDirectory;
     private readonly string _policyPath;
     private readonly string _auditPath;
@@ -91,6 +94,12 @@ public partial class MainWindow : Window
 
     private void AddFolder_Click(object sender, RoutedEventArgs e)
     {
+        if (_policy.ProtectedPaths.Count >= MaxProtectedPaths)
+        {
+            MessageBox.Show($"保護フォルダは最大{MaxProtectedPaths}件です。", "AI Guard", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
         using var dialog = new Forms.FolderBrowserDialog
         {
             Description = "AI Guardで保護するフォルダを選択してください",
@@ -133,6 +142,14 @@ public partial class MainWindow : Window
         try
         {
             var path = Path.GetFullPath(dialog.FileName);
+            var existing = _policy.AllowedApplications.Any(a =>
+                string.Equals(a.ExecutablePath, path, StringComparison.OrdinalIgnoreCase));
+            if (!existing && _policy.AllowedApplications.Count >= MaxAllowedApps)
+            {
+                MessageBox.Show($"許可アプリは最大{MaxAllowedApps}件です。", "AI Guard", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             using var stream = File.OpenRead(path);
             var sha256 = Convert.ToHexString(SHA256.HashData(stream));
 
@@ -160,21 +177,74 @@ public partial class MainWindow : Window
         RefreshPolicyLists();
     }
 
-    private void SavePolicy_Click(object sender, RoutedEventArgs e)
+    private async void SavePolicy_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             JsonPolicyStore.Save(_policyPath, _policy);
-            FooterStatusText.Text = $"保存しました: {DateTime.Now:yyyy/MM/dd HH:mm:ss}";
+            var syncResult = await Task.Run(SyncDriverPolicy);
+            FooterStatusText.Text = $"保存: {DateTime.Now:yyyy/MM/dd HH:mm:ss} / {syncResult.Message}";
+            await RefreshStatusAsync();
+
             MessageBox.Show(
-                "設定を保存しました。Kernel Driverが導入済みの場合、Driver側へのポリシー反映機構が有効な製品ビルドで保護設定が適用されます。",
+                syncResult.Success
+                    ? "設定を保存し、Kernel Driverへ反映しました。"
+                    : $"設定は保存しました。\n{syncResult.Message}",
                 "AI Guard",
                 MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                syncResult.Success ? MessageBoxImage.Information : MessageBoxImage.Warning);
         }
         catch (Exception ex)
         {
             MessageBox.Show($"保存に失敗しました。\n{ex.Message}", "AI Guard", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    private (bool Success, string Message) SyncDriverPolicy()
+    {
+        var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+        var candidates = new[]
+        {
+            Path.Combine(programFiles, "ROOOMTECH", "AI Guard", "Agent", "AIGuard.exe"),
+            Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "Agent", "AIGuard.exe")),
+            Path.Combine(AppContext.BaseDirectory, "AIGuard.exe")
+        };
+
+        var agentExe = candidates.FirstOrDefault(File.Exists);
+        if (agentExe is null)
+            return (false, "Policy Agentが見つかりません。インストール状態を確認してください。");
+
+        try
+        {
+            using var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = agentExe,
+                Arguments = "sync-driver",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            });
+
+            if (process is null)
+                return (false, "Policy Agentを起動できませんでした。");
+
+            var stdout = process.StandardOutput.ReadToEnd();
+            var stderr = process.StandardError.ReadToEnd();
+            if (!process.WaitForExit(5000))
+            {
+                process.Kill(true);
+                return (false, "Kernel Driverへの反映がタイムアウトしました。");
+            }
+
+            var message = string.IsNullOrWhiteSpace(stdout) ? stderr : stdout;
+            return process.ExitCode == 0
+                ? (true, message.Trim())
+                : (false, string.IsNullOrWhiteSpace(message) ? "Kernel Driverへ反映できませんでした。" : message.Trim());
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
         }
     }
 
