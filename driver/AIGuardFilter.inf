@@ -1,17 +1,18 @@
 [Version]
 Signature   = "$WINDOWS NT$"
-Class       = "ActivityMonitor"
-ClassGuid   = {b86dff51-a31e-4bac-b3cf-e8cfe75c9fc2}
+Class       = "SecurityEnhancer"
+ClassGuid   = {d02bc3da-0c8e-4945-9bd5-f1883c226c8c}
 Provider    = %ManufacturerName%
 DriverVer   = 09/10/2026,1.0.0.0
-CatalogFile = AIGuardFilter.cat
+CatalogFile =
+PnpLockdown = 1
 
 [DestinationDirs]
-DefaultDestDir = 12
-AIGuard.DriverFiles = 12
+AIGuard.DriverFiles = 13
 
 [DefaultInstall.NTamd64]
-CopyFiles = AIGuard.DriverFiles
+OptionDesc = %ServiceDescription%
+CopyFiles  = AIGuard.DriverFiles
 
 [DefaultInstall.NTamd64.Services]
 AddService = %ServiceName%,,AIGuard.Service
@@ -19,18 +20,19 @@ AddService = %ServiceName%,,AIGuard.Service
 [AIGuard.Service]
 DisplayName    = %ServiceDisplayName%
 Description    = %ServiceDescription%
-ServiceBinary  = %12%\AIGuardFilter.sys
+ServiceBinary  = %13%\AIGuardFilter.sys
 Dependencies   = FltMgr
 ServiceType    = 2
 StartType      = 3
 ErrorControl   = 1
-LoadOrderGroup = "FSFilter Activity Monitor"
+LoadOrderGroup = "FSFilter Security Enhancer"
 AddReg         = AIGuard.AddRegistry
 
 [AIGuard.AddRegistry]
-HKR,"Instances","DefaultInstance",0x00000000,%DefaultInstance%
-HKR,"Instances\"%DefaultInstance%,"Altitude",0x00000000,%Altitude%
-HKR,"Instances\"%DefaultInstance%,"Flags",0x00010001,0x0
+HKR,"Parameters","SupportedFeatures",0x00010001,0x3
+HKR,"Parameters\Instances","DefaultInstance",0x00000000,%DefaultInstance%
+HKR,"Parameters\Instances\"%DefaultInstance%,"Altitude",0x00000000,%Altitude%
+HKR,"Parameters\Instances\"%DefaultInstance%,"Flags",0x00010001,0x0
 
 [AIGuard.DriverFiles]
 AIGuardFilter.sys
@@ -47,5 +49,6 @@ ServiceName        = "AIGuardFilter"
 ServiceDisplayName = "ROOOMTECH AI Guard Filter"
 ServiceDescription = "ROOOMTECH AI Guard file system minifilter"
 DefaultInstance    = "AIGuard Instance"
-Altitude           = "385201"
+; DEVELOPMENT PLACEHOLDER ONLY. Replace with the Microsoft-assigned altitude before signing/distribution.
+Altitude           = "88888.421"
 DiskName           = "ROOOMTECH AI Guard Driver"
