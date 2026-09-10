@@ -23,3 +23,8 @@ if (Test-Path $installRoot) { Remove-Item -Recurse -Force $installRoot }
 
 Write-Host 'ROOOMTECH AI Guard本体・Agent Service・Filter Serviceを削除しました。'
 Write-Host '監査ログとpolicy.jsonは安全のためProgramDataに残しています。不要な場合は手動で削除してください。'
+
+# Best-effort native cleanup commands can legitimately return errors when an
+# optional legacy task or unsigned development filter is not installed. Do not
+# leak those expected native exit codes to a caller after successful cleanup.
+$global:LASTEXITCODE = 0
