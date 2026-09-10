@@ -1,11 +1,11 @@
 #include <fltKernel.h>
-#include <ntstrsafe.h>
 
 #define AIGUARD_POLICY_VERSION 1
 #define AIGUARD_MAX_PROTECTED_PATHS 8
 #define AIGUARD_MAX_ALLOWED_APPS 32
 #define AIGUARD_PATH_CHARS 520
 #define AIGUARD_PORT_NAME L"\\ROOOMTECHAIGuardPort"
+#define AIGUARD_POOL_TAG 'PGuA'
 
 PFLT_FILTER gFilterHandle = NULL;
 PFLT_PORT gServerPort = NULL;
@@ -125,20 +125,20 @@ static BOOLEAN AiGuardUnicodeStartsWithInsensitive(
 static BOOLEAN AiGuardPathIsProtected(_In_ PCUNICODE_STRING FileName)
 {
     ULONG i;
+    ULONG configuredCount;
     BOOLEAN result = FALSE;
 
     ExAcquireResourceSharedLite(&gPolicyLock, TRUE);
-    if (gPolicy.ProtectedPathCount > 0) {
-        for (i = 0; i < gPolicy.ProtectedPathCount && i < AIGUARD_MAX_PROTECTED_PATHS; i++) {
-            if (AiGuardUnicodeStartsWithInsensitive(FileName, gPolicy.ProtectedPaths[i])) {
-                result = TRUE;
-                break;
-            }
+    configuredCount = gPolicy.ProtectedPathCount;
+    for (i = 0; i < configuredCount && i < AIGUARD_MAX_PROTECTED_PATHS; i++) {
+        if (AiGuardUnicodeStartsWithInsensitive(FileName, gPolicy.ProtectedPaths[i])) {
+            result = TRUE;
+            break;
         }
     }
     ExReleaseResourceLite(&gPolicyLock);
 
-    if (!result && gPolicy.ProtectedPathCount == 0)
+    if (!result && configuredCount == 0)
         result = AiGuardUnicodeContainsInsensitive(FileName, gProtectedMarker);
 
     return result;
@@ -156,6 +156,7 @@ static BOOLEAN AiGuardProcessIsAllowed(void)
     PUNICODE_STRING processImage = NULL;
     NTSTATUS status;
     ULONG i;
+    ULONG configuredCount;
     BOOLEAN allowed = FALSE;
 
     if (PsGetCurrentProcessId() == (HANDLE)4)
@@ -166,19 +167,18 @@ static BOOLEAN AiGuardProcessIsAllowed(void)
         return FALSE;
 
     ExAcquireResourceSharedLite(&gPolicyLock, TRUE);
-    if (gPolicy.AllowedApplicationCount > 0) {
-        for (i = 0; i < gPolicy.AllowedApplicationCount && i < AIGUARD_MAX_ALLOWED_APPS; i++) {
-            UNICODE_STRING allowedImage;
-            RtlInitUnicodeString(&allowedImage, gPolicy.AllowedApplications[i]);
-            if (RtlEqualUnicodeString(processImage, &allowedImage, TRUE)) {
-                allowed = TRUE;
-                break;
-            }
+    configuredCount = gPolicy.AllowedApplicationCount;
+    for (i = 0; i < configuredCount && i < AIGUARD_MAX_ALLOWED_APPS; i++) {
+        UNICODE_STRING allowedImage;
+        RtlInitUnicodeString(&allowedImage, gPolicy.AllowedApplications[i]);
+        if (RtlEqualUnicodeString(processImage, &allowedImage, TRUE)) {
+            allowed = TRUE;
+            break;
         }
     }
     ExReleaseResourceLite(&gPolicyLock);
 
-    if (!allowed && gPolicy.AllowedApplicationCount == 0) {
+    if (!allowed && configuredCount == 0) {
         for (i = 0; i < RTL_NUMBER_OF(fallbackAllowedSuffixes); i++) {
             if (AiGuardUnicodeContainsInsensitive(processImage, fallbackAllowedSuffixes[i])) {
                 allowed = TRUE;
@@ -189,6 +189,22 @@ static BOOLEAN AiGuardProcessIsAllowed(void)
 
     ExFreePool(processImage);
     return allowed;
+}
+
+static BOOLEAN AiGuardCreateRequestsContentRead(_In_ PFLT_CALLBACK_DATA Data)
+{
+    ACCESS_MASK desiredAccess;
+    ULONG createOptions;
+
+    createOptions = Data->Iopb->Parameters.Create.Options & 0x00FFFFFF;
+    if ((createOptions & FILE_DIRECTORY_FILE) != 0)
+        return FALSE;
+
+    if (Data->Iopb->Parameters.Create.SecurityContext == NULL)
+        return TRUE;
+
+    desiredAccess = Data->Iopb->Parameters.Create.SecurityContext->DesiredAccess;
+    return (desiredAccess & (FILE_READ_DATA | GENERIC_READ | GENERIC_ALL | MAXIMUM_ALLOWED)) != 0;
 }
 
 FLT_PREOP_CALLBACK_STATUS AiGuardPreCreate(
@@ -203,6 +219,9 @@ FLT_PREOP_CALLBACK_STATUS AiGuardPreCreate(
     UNREFERENCED_PARAMETER(CompletionContext);
 
     if (Data->RequestorMode == KernelMode)
+        return FLT_PREOP_SUCCESS_NO_CALLBACK;
+
+    if (!AiGuardCreateRequestsContentRead(Data))
         return FLT_PREOP_SUCCESS_NO_CALLBACK;
 
     status = FltGetFileNameInformation(
@@ -244,6 +263,9 @@ NTSTATUS AiGuardConnectNotify(
     if (ConnectionCookie != NULL)
         *ConnectionCookie = NULL;
 
+    if (gClientPort != NULL)
+        return STATUS_DEVICE_BUSY;
+
     gClientPort = ClientPort;
     return STATUS_SUCCESS;
 }
@@ -264,6 +286,7 @@ NTSTATUS AiGuardMessageNotify(
     _Out_ PULONG ReturnOutputBufferLength)
 {
     PAIGUARD_POLICY_MESSAGE incoming;
+    ULONG i;
 
     UNREFERENCED_PARAMETER(PortCookie);
     UNREFERENCED_PARAMETER(OutputBuffer);
@@ -275,19 +298,38 @@ NTSTATUS AiGuardMessageNotify(
     if (InputBuffer == NULL || InputBufferLength != sizeof(AIGUARD_POLICY_MESSAGE))
         return STATUS_INVALID_PARAMETER;
 
-    incoming = (PAIGUARD_POLICY_MESSAGE)InputBuffer;
+    incoming = (PAIGUARD_POLICY_MESSAGE)ExAllocatePool2(
+        POOL_FLAG_NON_PAGED,
+        sizeof(AIGUARD_POLICY_MESSAGE),
+        AIGUARD_POOL_TAG);
+    if (incoming == NULL)
+        return STATUS_INSUFFICIENT_RESOURCES;
+
+    __try {
+        RtlCopyMemory(incoming, InputBuffer, sizeof(AIGUARD_POLICY_MESSAGE));
+    }
+    __except (EXCEPTION_EXECUTE_HANDLER) {
+        ExFreePoolWithTag(incoming, AIGUARD_POOL_TAG);
+        return GetExceptionCode();
+    }
+
     if (incoming->Version != AIGUARD_POLICY_VERSION ||
         incoming->ProtectedPathCount > AIGUARD_MAX_PROTECTED_PATHS ||
-        incoming->AllowedApplicationCount > AIGUARD_MAX_ALLOWED_APPS)
+        incoming->AllowedApplicationCount > AIGUARD_MAX_ALLOWED_APPS) {
+        ExFreePoolWithTag(incoming, AIGUARD_POOL_TAG);
         return STATUS_INVALID_PARAMETER;
+    }
 
-    incoming->ProtectedPaths[AIGUARD_MAX_PROTECTED_PATHS - 1][AIGUARD_PATH_CHARS - 1] = L'\0';
-    incoming->AllowedApplications[AIGUARD_MAX_ALLOWED_APPS - 1][AIGUARD_PATH_CHARS - 1] = L'\0';
+    for (i = 0; i < AIGUARD_MAX_PROTECTED_PATHS; i++)
+        incoming->ProtectedPaths[i][AIGUARD_PATH_CHARS - 1] = L'\0';
+    for (i = 0; i < AIGUARD_MAX_ALLOWED_APPS; i++)
+        incoming->AllowedApplications[i][AIGUARD_PATH_CHARS - 1] = L'\0';
 
     ExAcquireResourceExclusiveLite(&gPolicyLock, TRUE);
     RtlCopyMemory(&gPolicy, incoming, sizeof(AIGUARD_POLICY_MESSAGE));
     ExReleaseResourceLite(&gPolicyLock);
 
+    ExFreePoolWithTag(incoming, AIGUARD_POOL_TAG);
     return STATUS_SUCCESS;
 }
 
