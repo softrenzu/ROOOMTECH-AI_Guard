@@ -49,6 +49,6 @@ ServiceName        = "AIGuardFilter"
 ServiceDisplayName = "ROOOMTECH AI Guard Filter"
 ServiceDescription = "ROOOMTECH AI Guard file system minifilter"
 DefaultInstance    = "AIGuard Instance"
-; DEVELOPMENT PLACEHOLDER ONLY. Replace with the Microsoft-assigned altitude before signing/distribution.
-Altitude           = "88888.421"
+; Microsoft-assigned altitude confirmed on 10/05/2026.
+Altitude           = "82559.5"
 DiskName           = "ROOOMTECH AI Guard Driver"
