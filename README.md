@@ -22,7 +22,7 @@ ChatGPT、Claude、Gemini等のサービスそのものを判定するのでは�
 
 **1.0.0 Release Candidate**
 
-管理GUI、Policy Agent、Windows Service常駐、動的Driverポリシー同期、配布パッケージ生成まで実装済みです。一般のWindows 11へKernel Driverを配布するために必要なMicrosoft正式AltitudeおよびDriver署名は外部リリースゲートです。詳細は [docs/PRODUCTION_RELEASE.md](docs/PRODUCTION_RELEASE.md) を参照してください。
+管理GUI、Policy Agent、Windows Service常駐、動的Driverポリシー同期、配布パッケージ生成まで実装済みです。Microsoft正式Minifilter Altitude `82559.5` は取得・INF反映済みです。一般のWindows 11へKernel Driverを正式配布するための残りの主な外部リリースゲートはMicrosoft要件を満たすDriver署名・提出と実機検証です。詳細は [docs/PRODUCTION_RELEASE.md](docs/PRODUCTION_RELEASE.md) を参照してください。
 
 ## 主な機能
 
@@ -118,7 +118,7 @@ dotnet run --project .\src\AI.Guard.Agent\AI.Guard.Agent.csproj -- sync-driver
 
 ## Microsoft Driverリリース工程
 
-Minifilter Driverの正式配布前に、Microsoftから正式Altitudeを取得し、Microsoftの要件を満たした署名済みDriverを作成します。申請用文面は [docs/ALTITUDE_REQUEST.txt](docs/ALTITUDE_REQUEST.txt) に用意しています。
+Microsoftから正式Minifilter Altitude `82559.5` を取得し、`driver/AIGuardFilter.inf` へ反映済みです。次の工程はMicrosoft Partner Center / Windows Hardware Developer Programの要件を満たしたDriver署名・提出、署名済みDriverの組み込み、実機検証です。
 
 ---
 
