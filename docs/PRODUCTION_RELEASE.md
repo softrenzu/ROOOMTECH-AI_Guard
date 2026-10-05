@@ -16,13 +16,15 @@
 - 配布ZIP生成
 - インストール／アンインストールスクリプト
 - 個人利用無償、法人・団体・業務利用は有償・個別見積の利用条件
+- Microsoft正式Minifilter Altitude取得（82559.5、2026-10-05確認）
+- `driver/AIGuardFilter.inf` へ正式Altitude 82559.5を反映
 
 ## 一般配布前の外部リリースゲート
 
 Kernel Driverを通常のWindows 11へ配布するには、ソースコード完成とは別にMicrosoft側の手続きが必要です。
 
-1. Microsoftから正式なMinifilter Altitudeを取得する。
-2. 取得したAltitudeを `driver/AIGuardFilter.inf` の開発用値と置き換える。
+1. [完了] Microsoftから正式なMinifilter Altitudeを取得する。割当値: `82559.5`
+2. [完了] 取得したAltitudeを `driver/AIGuardFilter.inf` の開発用値と置き換える。
 3. Microsoft Partner Center / Windows Hardware Developer Programの要件を満たす。
 4. Microsoftの要求に従ってドライバーパッケージを署名・提出する。
 5. 署名済み `AIGuardFilter.sys` と必要な署名成果物を配布パッケージへ組み込む。
