@@ -106,7 +106,7 @@ jobs:
 
           This driver package is test-signed by the ephemeral WDK test certificate generated on the GitHub Actions runner.
           It is NOT Microsoft production-signed and MUST NOT be distributed to end users or installed on production systems.
-          The altitude in this package is a development placeholder and is NOT an officially assigned Microsoft altitude.
+          The INF uses the officially assigned Microsoft minifilter altitude 82559.5, but the driver package itself is still development/test-only until production signing is completed.
 
           Commit: $env:GITHUB_SHA
           "@ | Set-Content "$stage/README_DEV_ONLY.txt" -Encoding UTF8
